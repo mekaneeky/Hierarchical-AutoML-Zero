@@ -1,11 +1,16 @@
 import numpy as np
 import torch 
+import random
 
 class MemoryArrays:
     def __init__(self, num_scalars, num_vectors, num_tensors, scalar_size, vector_size, tensor_size):
         self.scalar_memory = [torch.zeros((1,)) for _ in range(num_scalars)] if num_scalars > 0 else []
         self.vector_memory = [torch.zeros(vector_size) for _ in range(num_vectors)] if num_vectors > 0 else []
         self.tensor_memory = [torch.zeros(tensor_size) for _ in range(num_tensors)] if num_tensors > 0 else []
+
+        self.scalar_range = range(num_scalars)
+        self.vector_range = range(num_scalars, num_scalars + num_vectors)
+        self.tensor_range = range(num_scalars + num_vectors, num_scalars + num_vectors + num_tensors)
 
         self.memory_types = []
         if num_scalars > 0:
@@ -115,6 +120,24 @@ class MemoryArrays:
 
     def __len__(self):
         return self._total_len
+    
+    def get_scalar_address(self):
+        return random.choice(self.scalar_range)
+
+    def get_vector_address(self):
+        return random.choice(self.vector_range)
+
+    def get_tensor_address(self):
+        return random.choice(self.tensor_range)
+
+    def is_scalar_address(self, address):
+        return address in self.scalar_range
+
+    def is_vector_address(self, address):
+        return address in self.vector_range
+
+    def is_tensor_address(self, address):
+        return address in self.tensor_range
 
 class HierarchicalMemoryArrays:
     def __init__(self, num_levels, num_scalars, num_vectors, num_tensors, scalar_size, vector_size, tensor_size):

@@ -8,7 +8,7 @@ from tqdm import tqdm
 from automl.memory import HierarchicalMemoryArrays
 from automl.function_decoder import FunctionDecoder
 from automl.fitness import FitnessEvaluator
-from automl.evolutionary_algorithm import LevelWiseEvolutionaryAlgorithm
+from automl.evolutionary_algorithm import LevelWiseEvolutionaryAlgorithm, AutoMLZero
 from automl.genome import FunctionGenome
 
 class EvolvableNN(nn.Module):
@@ -59,17 +59,17 @@ def main():
     memory = HierarchicalMemoryArrays(num_levels=1, num_scalars=10, num_vectors=5, num_tensors=2, scalar_size=1, vector_size=(28,), tensor_size=(28, 28))
     function_decoder = FunctionDecoder()
     
-    # Extend FunctionDecoder with activation function operations
-    function_decoder.decoding_map.update({
-        31: lambda x: torch.sigmoid(x),
-        32: lambda x: torch.tanh(x),
-        33: lambda x: torch.relu(x),
-        34: lambda x: torch.sin(x),
-        35: lambda x: torch.exp(x),
-        36: lambda x: x ** 2,
-        37: lambda x: torch.log(torch.abs(x) + 1e-8),
-        38: lambda x: torch.sqrt(torch.abs(x) + 1e-8),
-    })
+    # # Extend FunctionDecoder with activation function operations
+    # function_decoder.decoding_map.update({
+    #     31: lambda x: torch.sigmoid(x),
+    #     32: lambda x: torch.tanh(x),
+    #     33: lambda x: torch.relu(x),
+    #     34: lambda x: torch.sin(x),
+    #     35: lambda x: torch.exp(x),
+    #     36: lambda x: x ** 2,
+    #     37: lambda x: torch.log(torch.abs(x) + 1e-8),
+    #     38: lambda x: torch.sqrt(torch.abs(x) + 1e-8),
+    # })
 
     # Initialize evolutionary algorithm
     population_size = 100
@@ -78,7 +78,7 @@ def main():
     mutation_probability = 0.1
     num_generations = 50
 
-    ea = LevelWiseEvolutionaryAlgorithm(
+    automl = AutoMLZero(
         population_size=population_size,
         num_meta_levels=1,
         genome_length=genome_length,
@@ -88,6 +88,45 @@ def main():
         function_decoder=function_decoder,
         input_data=torch.randn(1, 28*28)  # Dummy input for initialization
     )
+
+    base_population = automl.hierarchical_genome.genomes[-1]
+    ## TODO load basic population evaluation
+    ## 
+
+    for meta_epoch in range(4):
+        for level in range(automl.num_meta_levels):
+            print(f"Evolving Level {level}")
+            population = automl.hierarchical_genome.genomes[level]
+            #self.evaluate_level(level, population, fitness_evaluator)#FIXME make manual
+            
+            for generation in range(num_generations[level]):
+                # Tournament selection
+                parent = self.tournament_selection(population, fitness_evaluator)
+
+                # Create and mutate offspring
+                offspring = self.mutate(parent, level)
+
+                # Add offspring to population and remove oldest member
+                population.append(offspring)
+                population.pop(0)
+
+                # Mark offspring for re-evaluation
+                self.fitness_cache[self.genome_to_key(offspring)] = (None, True)
+
+                # Update the level's population in the hierarchical genome
+                self.hierarchical_genome.genomes[level] = population
+
+                # Calculate and print best fitness
+                best_fitness = max(self.get_fitness(genome, fitness_evaluator) for genome in population)
+                print(f"Meta-Epoch {meta_epoch + 1} Generation {generation + 1}, Level {level}: Best Fitness = {best_fitness:.4f}")
+
+            # Update lower_level_population for the next level with the whole population
+            if level < self.num_meta_levels - 1:
+                for genome in self.hierarchical_genome.genomes[level + 1]:
+                    genome.lower_level_population = population
+                    # Invalidate cache for higher level genomes
+                    self.fitness_cache[self.genome_to_key(genome)] = (None, True)
+
 
     # Evolution loop
     for generation in range(num_generations):
@@ -113,7 +152,7 @@ def main():
             accuracy = evaluate_model(model, test_loader, device)
             print(accuracy)
             # Update evolutionary algorithm
-            ea.fitness_cache[ea.genome_to_key(genome)] = (accuracy, False)
+            genome.fitness = accuracy
 
         # Select best genomes for next generation
         # ea.hierarchical_genome.genomes[0] = ea.select_best_genomes(ea.hierarchical_genome.genomes[0], FitnessEvaluator(0), num_best=population_size)
@@ -121,6 +160,9 @@ def main():
         # Print best accuracy for this generation
         #best_accuracy = max(ea.get_fitness(genome, FitnessEvaluator(0)) for genome in ea.hierarchical_genome.genomes[0])
         #print(f"Generation {generation + 1}/{num_generations}, Best Accuracy: {best_accuracy:.4f}")
+        best_genome = max(generation, key=lambda g: g.fitness)
+        print(f"Generation {generation.number}: Best accuracy = {best_genome.fitness:.4f}")
+
 
     # Get best evolved activation function
     #best_genome = max(ea.hierarchical_genome.genomes[0], key=lambda g: ea.get_fitness(g, FitnessEvaluator(0)))
