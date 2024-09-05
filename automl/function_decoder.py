@@ -4,7 +4,6 @@ import torch
 class FunctionDecoder:
     def __init__(self):
         self.decoding_map = {
-            ## TODO write auto func validity test 
             ## Func, output, input1, input2
             0: (self.do_nothing, "scalar", None, None),
             1: (self.add_scalar, "scalar", "scalar", "scalar"),
@@ -25,7 +24,7 @@ class FunctionDecoder:
             16: (self.set_constant_scalar,"scalar", None, None), #TODO reflexive
             17: (self.gaussian_scalar, "scalar", None, None),
             18: (self.gaussian_matrix, "matrix", "matrix", None),
-            19: (self.uniform_scalar,"vector",None , None), 
+            19: (self.uniform_scalar,"vector","vector" , None), 
             20: (self.log_scalar,"scalar", "scalar", None),
             21: (self.power_scalar,"scalar", "scalar", "scalar"),
             22: (self.sqrt_scalar,"scalar", "scalar", None),
@@ -85,7 +84,7 @@ class FunctionDecoder:
             76: (self.leaky_relu,"matrix","matrix",None),
             77: (self.relu,"matrix","matrix",None),
             78: (self.stable_softmax,"matrix","matrix",None),
-            79: (self.mean_vector,"vector","matrix",None),
+            79: (self.mean_vector,"scalar","matrix",None),
             80: (self.std_axis,"vector","matrix",None),
             81: (self.uniform_matrix,"matrix", "matrix", None),
             82: (self.log_scalar,"matrix","matrix",None),
@@ -106,11 +105,11 @@ class FunctionDecoder:
             96: (self.broadcast_vector_to_matrix_row, "matrix", "vector", "matrix"),
             97: (self.broadcast_vector_to_matrix_col, "matrix", "vector", "matrix"),
             98: (self.outer_product, "matrix", "vector", "vector"),
-            99: (self.matmul, "matrix", "matrix", "vector"),
+            99: (self.matmul, "matrix", "matrix", "matrix"),
             100: (self.transpose, "matrix", "matrix", None),
             101: (self.gaussian_vector, "vector", "vector", None),
             102: (self.dot_vector, "scalar", "vector", "vector"),
-            103: (self.matmul, "matrix", "matrix", "matrix"),
+            #103: (self.matmul, "matrix", "matrix", "matrix"),
         
         }
 
@@ -121,12 +120,12 @@ class FunctionDecoder:
     @staticmethod
     def uniform_scalar(*args):
         low, high = args[2], args[3]
-        return torch.empty(1).uniform_(low, high)
+        return torch.empty(args[0].shape).uniform_(low, high)
 
     @staticmethod
     def uniform_vector(*args):
         low, high = args[2], args[3]
-        size = args[0].shape[0]
+        size = args[0].shape
         return torch.empty(size).uniform_(low, high)
 
     @staticmethod
@@ -143,7 +142,7 @@ class FunctionDecoder:
     @staticmethod
     def gaussian_vector(*args):
         mean, std = args[2], args[3]
-        size = args[0].shape[0]
+        size = args[0].shape[1]
         return torch.empty(size).normal_(mean, std)
 
     @staticmethod
@@ -304,7 +303,7 @@ class FunctionDecoder:
 
     @staticmethod
     def set_constant_scalar(*args):
-        return args[2]
+        return torch.tensor(args[2])
 
     @staticmethod
     def log_scalar(*args):

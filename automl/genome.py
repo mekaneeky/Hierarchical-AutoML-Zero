@@ -1,16 +1,24 @@
 import random
 import torch
 from copy import deepcopy
+from .memory import CentralMemory
 
 class FunctionGenome:
-    def __init__(self, length, hierarchical_memory, function_decoder, meta_level=0, lower_level_population=None):
+    def __init__(self, length, central_memory, function_decoder, meta_level=0, lower_level_population=None):
         self.length = length
-        self.hierarchical_memory = hierarchical_memory
-        self.memory = hierarchical_memory[meta_level]
+        #self.central_memory = central_memory
+        #self.memory = central_memory[meta_level]
+        self.central_memory = central_memory
+        self.memory = central_memory
+        self.memory.reset()
         self.function_decoder = function_decoder
         self.meta_level = meta_level
         self.lower_level_population = lower_level_population
         self.SIGN_FLIP_PROB = 0.1
+
+
+        self.expected_vector_size = deepcopy(self.memory.vector_memory[0].shape)
+        self.expected_tensor_shape = deepcopy(self.memory.tensor_memory[0].shape)
 
         # Calculate size of the lower level population
         self.lower_level_size = len(lower_level_population) if lower_level_population else 0
@@ -23,7 +31,7 @@ class FunctionGenome:
 
         self.gene = [random.randint(0, self.max_op_pop) for _ in range(length)]
 
-        self.memory_size = len(hierarchical_memory[meta_level])
+        self.memory_size = len(self.memory)
         self.input_gene = []
         self.input_gene_2 = []
         self.output_gene = []
@@ -44,9 +52,76 @@ class FunctionGenome:
         self.version = 0
         self.fitness = None  
 
+    def __deepcopy__(self, memo):
+        # Create a new instance
+        new_copy = FunctionGenome(self.length, self.central_memory, self.function_decoder, 
+                                  self.meta_level, self.lower_level_population)
+        
+        # Copy simple attributes
+        new_copy.gene = self.gene.copy()
+        new_copy.input_gene = self.input_gene.copy()
+        new_copy.input_gene_2 = self.input_gene_2.copy()
+        new_copy.output_gene = self.output_gene.copy()
+        new_copy.constants_gene = self.constants_gene.copy()
+        new_copy.constants_gene_2 = self.constants_gene_2.copy()
+        new_copy.version = self.version
+        new_copy.fitness = self.fitness
+        new_copy.memory = CentralMemory(
+            num_scalars=len(self.memory.scalar_memory),
+            num_vectors=len(self.memory.vector_memory),
+            num_tensors=len(self.memory.tensor_memory),
+            scalar_size=self.memory.scalar_memory[0].shape,
+            vector_size=self.memory.vector_memory[0].shape,
+            tensor_size=self.memory.tensor_memory[0].shape
+        )
+
+
+        return new_copy
+
+    def validate_memory(self):
+        if not hasattr(self.memory, 'vector_memory'):
+            print("No vector memory")
+            return False
+        
+        if len(self.memory.vector_memory) == 0:
+            print("No vector memory")
+            return False
+        
+        if not isinstance(self.memory.vector_memory[0], torch.Tensor):
+            print("Vector memory not torch tensor")
+            return False
+        
+        
+        for i, vector in enumerate(self.memory.vector_memory):
+            if vector.shape != self.expected_vector_size:
+                breakpoint()
+                print(f"Error: Inconsistent vector size at index {i}")
+                print(f"Expected size: {self.expected_vector_size}, Actual size: {vector.shape[0]}")
+                return False
+
+        if not hasattr(self.memory, 'tensor_memory'):
+            print("No tensor memory")
+            return False
+        
+        if len(self.memory.tensor_memory) == 0:
+            print("No tensor memory")
+            return False
+        
+        
+        for i, tensor in enumerate(self.memory.tensor_memory):
+            if tensor.shape != self.expected_tensor_shape:
+                breakpoint()
+                print(f"Error: Inconsistent tensor shape at index {i}")
+                print(f"Expected shape: {self.expected_tensor_shape}, Actual shape: {tensor.shape}")
+                return False
+        return True
+
+
     def set_row_column(self):
-        self.row_fixed = self.memory.vector_memory[0].shape[0]
-        self.column_fixed = self.memory.vector_memory[0].shape[1]
+
+        self.row_fixed = random.randint(0,self.memory.vector_memory[0].shape[0]-1)
+        self.column_fixed = random.randint(0, self.memory.tensor_memory[0].shape[1]-1)
+
 
     def get_random_memory_address(self, address_type):
         #address_type = random.choice(['scalar', 'vector', 'tensor'])
@@ -70,20 +145,21 @@ class FunctionGenome:
         meta_level = self.meta_level
         lower_level_population = self.lower_level_population
         lower_level_size = self.lower_level_size
-        
+        self.memory.reset()
+        memory = self.memory
 
-        def evolved_function(input_data, hierarchical_memory=None):
-            # If no hierarchical_memory is provided, create a temporary one
-            if hierarchical_memory is None:
-                memory = [0] * memory_size
-            else:
-                memory = hierarchical_memory[meta_level]
+        def evolved_function(input_data):
+            # If no central_memory is provided, create a temporary one
+            #if central_memory is None:
+            #    memory = [0] * memory_size
+            #else:
+            #    memory = central_memory[meta_level]
 
-            memory[-1] = input_data
+            memory[6] = input_data
 
             for i, op in enumerate(gene):
                 if meta_level == 0:
-                    func = function_decoder.decoding_map[op]
+                    func = function_decoder.decoding_map[op][0]
                     input1 = torch.tensor(memory[input_gene[i]])
                     input2 = torch.tensor(memory[input_gene_2[i]])
                     constant = torch.tensor(constants_gene[i])
@@ -92,17 +168,21 @@ class FunctionGenome:
 
                 else:
                     lower_genome = lower_level_population[op]
-                    output = lower_genome.function()(input_data, hierarchical_memory)
+                    output = lower_genome.function()(input_data)
                 
-
+                #if not self.validate_memory():
+                #    print("Premystery")
+                #    breakpoint()
                 memory[output_gene[i]] = output
-
-            return memory[0]  # Assuming the final output is always stored in the first memory location
+                #if not self.validate_memory():
+                #    print("Postmystery")
+                #    breakpoint()
+            return memory[6]  # Assuming the final output is always stored in the first memory location
 
         return evolved_function
 
     def execute(self, input_data):
-        memory = self.hierarchical_memory[self.meta_level]
+        memory = self.central_memory[self.meta_level]
         memory[-1] = input_data
 
         for i, op in enumerate(self.gene):
@@ -139,9 +219,9 @@ class FunctionGenome:
     def mutate_float_log_scale(value): 
         """Mutate a float value using log-scale mutation.""" 
         if value > 0: 
-            return torch.exp(torch.log(value) + random.gauss(0.0, 1.0)) 
+            return torch.exp(torch.log(torch.tensor(value)) + random.gauss(0.0, 1.0)) 
         else: 
-            return -torch.exp(torch.log(-value) + random.gauss(0.0, 1.0)) 
+            return -torch.exp(torch.log(-torch.tensor(value)) + random.gauss(0.0, 1.0)) 
 
     def mutate_constant(self): 
         """Either flip the sign of a value or apply log-scale mutation.""" 
@@ -197,9 +277,9 @@ class TopKFunctionGenome(FunctionGenome):
         raise NotImplementedError
 
 class FreeForAllFunctionGenome(FunctionGenome):
-    def __init__(self, length, hierarchical_memory, function_decoder, meta_level=0, lower_level_population=None):
+    def __init__(self, length, central_memory, function_decoder, meta_level=0, lower_level_population=None):
         self.length = length
-        self.hierarchical_memory = hierarchical_memory
+        self.central_memory = central_memory
         self.function_decoder = function_decoder
         self.meta_level = meta_level
         self.lower_level_population = lower_level_population
@@ -212,7 +292,7 @@ class FreeForAllFunctionGenome(FunctionGenome):
         #TODO make all level function support an optional case
         self.gene = [random.randint(0, self.max_op_pop) for _ in range(length)]
 
-        self.memory_size = len(hierarchical_memory[meta_level])
+        self.memory_size = len(central_memory[meta_level])
         self.input_gene = [random.randint(0, self.memory_size - 1) for _ in range(length)]
         self.input_gene_2 = [random.randint(0, self.memory_size - 1) for _ in range(length)]
         self.output_gene = [random.randint(0, self.memory_size - 1) for _ in range(length)]
@@ -231,12 +311,12 @@ class FreeForAllFunctionGenome(FunctionGenome):
         lower_level_population = self.lower_level_population
         lower_level_size = self.lower_level_size
 
-        def evolved_function(input_data, hierarchical_memory=None):
-            # If no hierarchical_memory is provided, create a temporary one
-            if hierarchical_memory is None:
+        def evolved_function(input_data, central_memory=None):
+            # If no central_memory is provided, create a temporary one
+            if central_memory is None:
                 memory = [0] * memory_size
             else:
-                memory = hierarchical_memory[meta_level]
+                memory = central_memory[meta_level]
 
             memory[-1] = input_data
 
@@ -248,7 +328,7 @@ class FreeForAllFunctionGenome(FunctionGenome):
                     output = func(input1, input2)
                 elif lower_level_population and op - len(function_decoder.decoding_map) < lower_level_size:
                     lower_genome = lower_level_population[op - len(function_decoder.decoding_map)]
-                    output = lower_genome.function()(input_data, hierarchical_memory)
+                    output = lower_genome.function()(input_data, central_memory)
                 else:
                     output = input_data  # No operation if op is out of range
 
@@ -259,7 +339,7 @@ class FreeForAllFunctionGenome(FunctionGenome):
         return evolved_function
 
     def execute(self, input_data):
-        memory = self.hierarchical_memory[self.meta_level]
+        memory = self.central_memory[self.meta_level]
         memory[-1] = input_data
 
         for i, op in enumerate(self.gene):
@@ -282,13 +362,13 @@ class FreeForAllFunctionGenome(FunctionGenome):
 
 
 class HierarchicalFunctionGenome:
-    def __init__(self, length, hierarchical_memory, meta_level, lower_level_population):
+    def __init__(self, length, central_memory, meta_level, lower_level_population):
         self.length = length
-        self.hierarchical_memory = hierarchical_memory
+        self.central_memory = central_memory
         self.meta_level = meta_level
         self.lower_level_population = lower_level_population
 
-        self.memory_size = len(hierarchical_memory[meta_level])
+        self.memory_size = len(central_memory[meta_level])
 
         # Initialize genes
         self.gene = [random.randint(0, len(lower_level_population) - 1) for _ in range(length)]
@@ -311,7 +391,7 @@ class HierarchicalFunctionGenome:
             self.output_gene[index] = random.randint(0, self.memory_size - 1)
 
     def execute(self, input_data):
-        memory = self.hierarchical_memory[self.meta_level]
+        memory = self.central_memory[self.meta_level]
         memory[-1] = input_data
 
         for i, function_index in enumerate(self.gene):
@@ -330,7 +410,7 @@ class HierarchicalFunctionGenome:
 
     def __deepcopy__(self, memo):
         # Create a new instance
-        new_copy = HierarchicalFunctionGenome(self.length, self.hierarchical_memory, self.meta_level, self.lower_level_population)
+        new_copy = HierarchicalFunctionGenome(self.length, self.central_memory, self.meta_level, self.lower_level_population)
 
         # Copy the genes
         new_copy.gene = self.gene.copy()
@@ -341,9 +421,9 @@ class HierarchicalFunctionGenome:
         return new_copy
 
 class HierarchicalGenome:
-    def __init__(self, num_meta_levels, genome_length, hierarchical_memory, function_decoder, population_size):
+    def __init__(self, num_meta_levels, genome_length, central_memory, function_decoder, population_size):
         self.num_meta_levels = num_meta_levels
-        self.hierarchical_memory = hierarchical_memory
+        self.central_memory = central_memory
         self.function_decoder = function_decoder
 
         self.genomes = []
@@ -352,9 +432,9 @@ class HierarchicalGenome:
             
             for _ in range(population_size):
                 if meta_level == 0: 
-                    current_population.append(FunctionGenome(genome_length, hierarchical_memory, function_decoder, meta_level=meta_level))
+                    current_population.append(FunctionGenome(genome_length, central_memory, function_decoder, meta_level=meta_level))
                 else:
-                    current_population.append(FunctionGenome(genome_length, hierarchical_memory, function_decoder, meta_level=meta_level, lower_level_population=self.genomes[-1]))
+                    current_population.append(FunctionGenome(genome_length, central_memory, function_decoder, meta_level=meta_level, lower_level_population=self.genomes[-1]))
             self.genomes.append(deepcopy(current_population))
             current_population = []
 

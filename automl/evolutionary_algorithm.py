@@ -4,19 +4,19 @@ from .genome import FunctionGenome, HierarchicalGenome
 
 class AutoMLZero:
     def __init__(self, population_size, num_meta_levels, genome_length, tournament_size,
-                 hierarchical_memory, function_decoder):
+                 central_memory, function_decoder):
         self.population_size = population_size
         self.num_meta_levels = num_meta_levels
         self.genome_length = genome_length
         self.tournament_size = tournament_size
-        self.hierarchical_memory = hierarchical_memory
-        self.hierarchical_genome = HierarchicalGenome(num_meta_levels, genome_length, hierarchical_memory, function_decoder, population_size)
+        self.central_memory = central_memory
+        self.hierarchical_genome = HierarchicalGenome(num_meta_levels, genome_length, central_memory, function_decoder, population_size)
         self.function_decoder = function_decoder
         
     def mutate(self, genome, level):
         new_genome = FunctionGenome(
             self.genome_length,
-            self.hierarchical_memory,
+            self.central_memory,
             self.function_decoder,
             meta_level=level,
             lower_level_population=self.hierarchical_genome.genomes[level - 1] if level > 0 else None
