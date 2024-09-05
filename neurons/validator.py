@@ -23,20 +23,21 @@ def load_data() -> DataLoader:
     return train_loader, val_loader
 
 def main():
-    # Initialize configurations
-    config = Configurator.combine_configs()
-    
     # Initialize Bittensor Network
-    BittensorNetwork.initialize(config)
+    bt_config = bt.config(Config.wallet_name)
+    bt_config.netuid = Config.netuid
+    bt_config.wallet.hotkey = Config.wallet_hotkey
+    bt_config.subtensor.chain_endpoint = Config.chain_endpoint
+    BittensorNetwork.initialize(bt_config)
     
     # Initialize Chain Manager and HF Manager
-    chain_manager = ChainMultiAddressStore(BittensorNetwork.subtensor, config.netuid, BittensorNetwork.wallet)
+    chain_manager = ChainMultiAddressStore(BittensorNetwork.subtensor, Config.netuid, BittensorNetwork.wallet)
     hf_manager = HFManager(
         local_dir=".",
-        hf_token=config.hf_token,
-        my_repo_id=config.my_repo_id,
-        averaged_model_repo_id=config.averaged_model_repo_id,
-        device=config.device
+        hf_token=Config.hf_token,
+        my_repo_id=Config.my_repo_id,
+        averaged_model_repo_id=Config.averaged_model_repo_id,
+        device=Config.device
     )
     
     # Load MNIST data
@@ -44,14 +45,15 @@ def main():
     
     # Initialize AutoMLValidator
     validator = AutoMLValidator(
-        device=config.device,
+        device=Config.device,
         model=None,  # We don't need a predefined model for AutoML
         optimizer=None,  # We don't need an optimizer for validation
         data_loader=val_loader,
         bittensor_network=BittensorNetwork,
         chain_manager=chain_manager,
         hf_manager=hf_manager,
-        interval=config.validation_interval
+        interval=Config.validation_interval,
+        local_gradient_dir=Config.local_gradient_dir
     )
     
     # Start periodic validation
