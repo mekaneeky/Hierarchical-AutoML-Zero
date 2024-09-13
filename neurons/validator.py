@@ -9,7 +9,12 @@ from typing import List, Dict, Tuple
 from automl.models import EvolvableNN
 from automl.function_decoder import FunctionDecoder
 from automl.gene_io import import_gene_from_json
+from validator_class import AutoMLValidator
 
+from btt_connector import BittensorNetwork
+from chain_manager import ChainMultiAddressStore
+from hf_manager import HFManager
+from config import Config
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)

@@ -4,7 +4,7 @@ from copy import deepcopy
 from .memory import CentralMemory
 
 class FunctionGenome:
-    def __init__(self, length, central_memory, function_decoder, meta_level=0, lower_level_population=None):
+    def __init__(self, length, central_memory, function_decoder, meta_level=0, lower_level_population=None,input_addresses=[6], output_addresses=[5]):
         self.length = length
         #self.central_memory = central_memory
         #self.memory = central_memory[meta_level]
@@ -51,6 +51,9 @@ class FunctionGenome:
         
         self.version = 0
         self.fitness = None  
+        self.input_addresses = input_addresses
+        self.output_addresses = output_addresses
+
 
     def __deepcopy__(self, memo):
         # Create a new instance
@@ -148,14 +151,15 @@ class FunctionGenome:
         self.memory.reset()
         memory = self.memory
 
-        def evolved_function(input_data):
+        def evolved_function(*args):
             # If no central_memory is provided, create a temporary one
             #if central_memory is None:
             #    memory = [0] * memory_size
             #else:
             #    memory = central_memory[meta_level]
 
-            memory[6] = input_data
+            for i, data in enumerate(args):
+                self.memory[self.input_addresses[i]] = data
 
             for i, op in enumerate(gene):
                 if meta_level == 0:
@@ -168,7 +172,7 @@ class FunctionGenome:
 
                 else:
                     lower_genome = lower_level_population[op]
-                    output = lower_genome.function()(input_data)
+                    output = lower_genome.function()(*args)
                 
                 #if not self.validate_memory():
                 #    print("Premystery")
@@ -177,13 +181,15 @@ class FunctionGenome:
                 #if not self.validate_memory():
                 #    print("Postmystery")
                 #    breakpoint()
-            return memory[6]  # Assuming the final output is always stored in the first memory location
+            return tuple(self.memory[addr] for addr in self.output_addresses)  # Assuming the final output is always stored in the first memory location
 
         return evolved_function
 
-    def execute(self, input_data):
+    def execute(self, *args):
         memory = self.central_memory[self.meta_level]
-        memory[-1] = input_data
+        
+        for i, data in enumerate(args):
+            self.memory[self.input_addresses[i]] = data
 
         for i, op in enumerate(self.gene):
             if self.meta_level == 0:
@@ -195,12 +201,12 @@ class FunctionGenome:
                 output = func(input1, input2, constant, constant_2, self.row_fixed, self.column_fixed )
             else:
                 lower_genome = self.lower_level_population[op]
-                output = lower_genome.execute(input_data)
+                output = lower_genome.execute(*args)
             
 
             memory[self.output_gene[i]] = output
 
-        return memory[0]  # Assuming the final output is always stored in the first memory location
+        return tuple(self.memory[addr] for addr in self.output_addresses)  # Assuming the final output is always stored in the first memory location
 
     def mutate(self):
         mutation_type = random.choice(['one_argument', 'add_or_remove_one', 'all', 'constant'])

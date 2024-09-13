@@ -1,6 +1,9 @@
 import random
 import numpy as np
 from .genome import FunctionGenome, HierarchicalGenome
+import torch
+import hashlib
+from copy import copy
 
 class AutoMLZero:
     def __init__(self, population_size, num_meta_levels, genome_length, tournament_size,
@@ -12,6 +15,39 @@ class AutoMLZero:
         self.central_memory = central_memory
         self.hierarchical_genome = HierarchicalGenome(num_meta_levels, genome_length, central_memory, function_decoder, population_size)
         self.function_decoder = function_decoder
+        self.fec_cache = dict()
+        self.fixed_inputs = torch.randn(self.central_memory.vector_memory[0].shape[0]) #FIXME needs to adapt to input type
+
+    def functional_equivalence_check(self, genome):
+        """
+        Perform functional equivalence checking to avoid re-evaluating identical algorithms.
+        """
+        # Generate a fingerprint for the genome
+        fingerprint = self.generate_fingerprint(genome)
+        
+        if fingerprint in self.fec_cache:
+            return fingerprint, self.fec_cache[fingerprint]
+        
+        return fingerprint, None
+
+    def generate_fingerprint(self, genome):
+        """
+        Generate a fingerprint for a genome by running it on a fixed set of inputs.
+        """
+        
+        outputs = []
+        
+        genome.memory.reset()
+        #genome.memory[6] = copy(self.fixed_inputs)
+        try:
+            output = genome.function()(copy(self.fixed_inputs))
+            outputs.append(output[0])
+        except:
+           outputs.append("fail")
+        
+        # Hash the outputs to create a fingerprint
+        fingerprint = hashlib.md5(str(outputs).encode()).hexdigest()
+        return fingerprint
         
     def mutate(self, genome, level):
         new_genome = FunctionGenome(

@@ -8,7 +8,8 @@ from automl.evolutionary_algorithm import AutoMLZero
 from automl.memory import CentralMemory
 from automl.function_decoder import FunctionDecoder
 from automl.models import EvolvableNN, BaselineNN
-from automl.gene_io import export_gene_to_json
+from automl.gene_io import export_gene_to_json, import_gene_from_json
+from automl.unpacker import HierarchicalGenomeUnpacker
 
 from config import Config  # Assume we have a config file
 
@@ -55,6 +56,21 @@ def create_and_evaluate_model(genome, train_loader, val_loader):
     train(model, train_loader)
     return evaluate(model, val_loader)
 
+def evaluate_population(population, train_loader, val_loader):
+        for genome in tqdm(population):
+            try:
+                model = EvolvableNN(
+                    input_size=Config.INPUT_SIZE, 
+                    hidden_size=Config.HIDDEN_SIZE, 
+                    output_size=Config.OUTPUT_SIZE, 
+                    evolved_activation=genome.function()
+                )
+                train(model, train_loader)
+                genome.fitness = evaluate(model, val_loader)
+            except:
+                del model
+                genome.fitness = Config.MIN_FITNESS
+
 def mine_genes(repo_name):
     train_loader, val_loader = load_data()
 
@@ -79,8 +95,12 @@ def mine_genes(repo_name):
     print(f"Baseline model accuracy: {baseline_accuracy:.4f}")
 
     population = automl.hierarchical_genome.genomes[-1]
-    best_genome_all_time = None
-    best_fitness_all_time = -float('inf')
+    evaluate_population(population, train_loader, val_loader)
+    best_genome_all_time = deepcopy(max(population, key=lambda g: g.fitness))
+
+    
+
+
 
     for generation in tqdm(range(Config.NUM_GENERATIONS)):
         for _ in range(Config.GENERATION_ITERS):
@@ -93,8 +113,7 @@ def mine_genes(repo_name):
                 population.append(offspring)
                 population.pop(0)
 
-                if accuracy > best_fitness_all_time:
-                    best_fitness_all_time = accuracy
+                if accuracy > best_genome_all_time.fitness:
                     best_genome_all_time = deepcopy(offspring)
                     
                     export_gene_to_json(best_genome_all_time, "best_gene.json")
@@ -104,7 +123,12 @@ def mine_genes(repo_name):
                 print(f"Error in generation {generation}: {str(e)}")
                 offspring.fitness = Config.MIN_FITNESS
 
-        print(f"Generation {generation}: Best accuracy = {best_fitness_all_time:.4f}")
+        print(f"Generation {generation}: Best accuracy = {best_genome_all_time.fitness:.4f}")
+    
+    decoder = FunctionDecoder()
+    best_gene = import_gene_from_json("best_gene.json",decoder)
+    unpacker = HierarchicalGenomeUnpacker()
+    print(unpacker.unpack_function_genome(best_gene))
 
 def push_to_huggingface(repo_name, file_path, commit_message):
     from huggingface_hub import HfApi, Repository
