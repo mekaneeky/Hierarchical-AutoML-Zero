@@ -1,0 +1,318 @@
+from abc import ABC, abstractmethod
+from copy import deepcopy
+from huggingface_hub import HfApi, Repository
+import os
+import requests
+import torch
+from torch.utils.data import DataLoader
+from torchvision import datasets, transforms
+from tqdm import tqdm
+
+from automl.evolutionary_algorithm import AutoMLZero
+from automl.memory import CentralMemory
+from automl.function_decoder import FunctionDecoder
+from automl.models import BaselineNN, EvolvableNN
+from automl.gene_io import export_gene_to_json, import_gene_from_json
+
+
+
+class BaseMiner(ABC):
+    def __init__(self, config):
+        self.config = config
+        self.central_memory = CentralMemory(
+            config['num_scalars'], config['num_vectors'], config['num_tensors'],
+            config['scalar_size'], config['vector_size'], config['tensor_size']
+        )
+        self.function_decoder = FunctionDecoder()
+        self.automl = AutoMLZero(
+            population_size=config['population_size'],
+            num_meta_levels=config['num_meta_levels'],
+            genome_length=config['genome_length'],
+            tournament_size=config['tournament_size'],
+            central_memory=self.central_memory,
+            function_decoder=self.function_decoder,
+            input_addresses=config["input_addresses"],
+            output_addresses=config['output_addresses']
+        )
+        self.migration_server_url = config.get('migration_server_url', None)
+        self.migration_interval = config.get('migration_interval', 20)
+
+    def migrate_genes(self, best_gene):
+        if not self.migration_server_url:
+            return []
+
+        # Submit best gene
+        gene_data = export_gene_to_json(gene=best_gene)
+        requests.post(f"{self.migration_server_url}/submit_gene", json=gene_data)
+        
+        # Get mixed genes from server
+        response = requests.get(f"{self.migration_server_url}/get_mixed_genes")
+        received_genes_data = response.json()
+        
+        return [import_gene_from_json(gene_data=gene_data, function_decoder=self.function_decoder) 
+                for gene_data in received_genes_data]
+    
+    def push_to_huggingface(self, file_path, commit_message):
+        if not self.config["huggingface_repo"]:
+            print("No repository name provided. Skipping push to Hugging Face.")
+            return
+
+        api = HfApi()
+        repo_url = f"https://huggingface.co/{self.config["huggingface_repo"]}"
+        
+        if not os.path.exists(self.config["huggingface_repo"]):
+            Repository(self.config["huggingface_repo"], clone_from=repo_url)
+        
+        repo = Repository(self.config["huggingface_repo"], repo_url)
+        repo.git_pull()
+        
+        api.upload_file(
+            path_or_fileobj=file_path,
+            path_in_repo=file_path,
+            repo_id=self.config["huggingface_repo"],
+            commit_message=commit_message
+        )
+
+    def create_baseline_model(self):
+        return BaselineNN(input_size=28*28, hidden_size=128, output_size=10)
+
+    def measure_baseline(self):
+        train_loader, val_loader = self.load_data()
+        baseline_model = self.create_baseline_model()
+        self.train(baseline_model, train_loader)
+        self.baseline_accuracy = self.evaluate(baseline_model, val_loader)
+        print(f"Baseline model accuracy: {self.baseline_accuracy:.4f}")
+    
+    @abstractmethod
+    def load_data(self):
+        pass
+
+    @abstractmethod
+    def create_model(self, genome):
+        pass
+
+    @abstractmethod
+    def train(self, model, train_loader):
+        pass
+
+    @abstractmethod
+    def evaluate(self, model, val_loader):
+        pass
+
+    def mine(self):
+        self.measure_baseline()
+        train_loader, val_loader = self.load_data()
+        population = self.automl.hierarchical_genome.genomes[-1]
+        self.evaluate_population(population, train_loader, val_loader)
+        best_genome_all_time = deepcopy(max(population, key=lambda g: g.fitness))
+
+        for generation in tqdm(range(self.config['generations'])):
+            for _ in tqdm(range(self.config['generation_iters'])):
+                parent = self.automl.tournament_selection(population)
+                offspring = self.automl.mutate(parent, 0)
+                
+                fingerprint, cached_fitness = self.automl.functional_equivalence_check(offspring)
+                if cached_fitness is not None:
+                    offspring.fitness = cached_fitness
+                    continue
+
+                model = self.create_model(offspring)
+                try:
+                    self.train(model, train_loader)
+                    accuracy = self.evaluate(model, val_loader)
+                    offspring.fitness = accuracy
+                    self.automl.fec_cache[fingerprint] = accuracy
+                    population.append(offspring)
+                    population.pop(0)
+
+                    if accuracy > best_genome_all_time.fitness:
+                        best_genome_all_time = deepcopy(offspring)
+                        export_gene_to_json(best_genome_all_time, "best_gene.json")
+                        self.push_to_huggingface("best_gene.json", f"Best gene (Gen {generation}, Acc {accuracy:.4f})")
+
+                except Exception as e:
+                    offspring.fitness = -9999
+                    self.automl.fec_cache[fingerprint] = -9999
+
+            best_genome = deepcopy(max(population, key=lambda g: g.fitness))
+            if best_genome.fitness > best_genome_all_time.fitness:
+                best_genome_all_time = deepcopy(best_genome)
+
+            print(f"Generation {generation}: Best accuracy = {best_genome.fitness:.4f}")
+            print(f"Improvement over baseline: {best_genome.fitness - self.baseline_accuracy:.4f}")
+            print(f"Total unique algorithms seen: {len(self.automl.fec_cache.keys())}")
+
+            if self.migration_server_url and generation % self.migration_interval == 0:
+                received_genes = self.migrate_genes(best_genome)
+                self.evaluate_population(received_genes, train_loader, val_loader)
+                
+                # Integrate received genes into population
+                for received_gene in received_genes:
+                    if received_gene.fitness > min(population, key=lambda g: g.fitness).fitness:
+                        population.pop(0)  # Remove worst gene
+                        population.append(received_gene)
+
+
+        return best_genome_all_time
+    
+    def evaluate_population(self, population, train_loader, val_loader):
+        for genome in tqdm(population):
+            try:
+                model = self.create_model(genome)
+                self.train(model, train_loader)
+                genome.fitness = self.evaluate(model, val_loader)
+            except:
+                genome.fitness = -9999
+
+class ActivationMiner(BaseMiner):
+    def load_data(self):
+        transform = transforms.Compose([transforms.ToTensor(), transforms.Normalize((0.1307,), (0.3081,))])
+        train_data = datasets.MNIST('../data', train=True, download=True, transform=transform)
+        val_data = datasets.MNIST('../data', train=False, transform=transform)
+        train_loader = DataLoader(train_data, batch_size=64, shuffle=True)
+        val_loader = DataLoader(val_data, batch_size=128, shuffle=False)
+        return train_loader, val_loader
+
+    def create_model(self, genome):
+        return EvolvableNN(
+            input_size=28*28, 
+            hidden_size=128, 
+            output_size=10, 
+            evolved_activation=genome.function()
+        )
+
+    def train(self, model, train_loader):
+        optimizer = torch.optim.Adam(model.parameters())
+        criterion = torch.nn.CrossEntropyLoss()
+        model.train()
+        for idx, (inputs, targets) in enumerate(train_loader):
+            if idx == 1:
+                break
+            optimizer.zero_grad()
+            outputs = model(inputs)
+            loss = criterion(outputs, targets)
+            loss.backward()
+            optimizer.step()
+
+    def evaluate(self, model, val_loader):
+        model.eval()
+        correct = 0
+        total = 0
+        with torch.no_grad():
+            for idx, (inputs, targets) in enumerate(val_loader):
+                if idx > 10:
+                    return correct/total
+                outputs = model(inputs)
+                _, predicted = outputs.max(1)
+                total += targets.size(0)
+                correct += predicted.eq(targets).sum().item()
+        return correct / total
+    
+class EvolvedLoss(torch.nn.Module):
+    def __init__(self, genome):
+        super().__init__()
+        self.genome = genome
+
+    def forward(self, outputs, targets):
+        outputs = outputs.detach().float().requires_grad_()
+        targets = targets.detach().float().requires_grad_()
+        
+        memory = self.genome.memory
+        memory.reset()
+        
+        memory[0] = outputs
+        memory[1] = targets
+
+        for i, op in enumerate(self.genome.gene):
+            func = self.genome.function_decoder.decoding_map[op][0]
+            input1 = memory[self.genome.input_gene[i]]
+            input2 = memory[self.genome.input_gene_2[i]]
+            constant = torch.tensor(self.genome.constants_gene[i], requires_grad=True)
+            constant_2 = torch.tensor(self.genome.constants_gene_2[i], requires_grad=True)
+            
+            output = func(input1, input2, constant, constant_2, self.genome.row_fixed, self.genome.column_fixed)
+            memory[self.genome.output_gene[i]] = output
+
+        loss = memory[0].mean() if memory[0].numel() > 1 else memory[0]
+        return loss
+
+class LossMiner(BaseMiner):
+    def load_data(self):
+        transform = transforms.Compose([transforms.ToTensor(), transforms.Normalize((0.1307,), (0.3081,))])
+        train_data = datasets.MNIST('../data', train=True, download=True, transform=transform)
+        val_data = datasets.MNIST('../data', train=False, transform=transform)
+        train_loader = DataLoader(train_data, batch_size=128, shuffle=True)
+        val_loader = DataLoader(val_data, batch_size=128, shuffle=False)
+        return train_loader, val_loader
+
+    def create_model(self, genome):
+        return BaselineNN(input_size=28*28, hidden_size=128, output_size=10), EvolvedLoss(genome)
+
+    def train(self, model_and_loss, train_loader):
+        model, loss_function = model_and_loss
+        optimizer = torch.optim.Adam(model.parameters())
+        model.train()
+        for idx, (inputs, targets) in enumerate(train_loader):
+            if idx == 1:
+                break
+            optimizer.zero_grad()
+            outputs = model(inputs)
+            loss = loss_function(outputs, targets)
+            loss.backward()
+            optimizer.step()
+
+    def evaluate(self, model_and_loss, val_loader):
+        model, _ = model_and_loss
+        model.eval()
+        correct = 0
+        total = 0
+        with torch.no_grad():
+            for idx, (inputs, targets) in enumerate(val_loader):
+                if idx > 10:
+                    break
+                outputs = model(inputs)
+                _, predicted = outputs.max(1)
+                total += targets.size(0)
+                correct += predicted.eq(targets).sum().item()
+        return correct / total
+    
+    def create_baseline_model(self):
+        return BaselineNN(input_size=28*28, hidden_size=128, output_size=10), torch.nn.CrossEntropyLoss()
+    
+class SimpleMiner(BaseMiner):
+    def load_data(self):
+        x_data = torch.linspace(0, 10, 100)
+        y_data = self.target_function(x_data)
+        return (x_data, y_data), None
+
+    def create_model(self, genome):
+        return genome.function()
+
+    def train(self, model, train_data):
+        # No training needed for this simple case
+        pass
+
+    def evaluate(self, model, val_data):
+        x_data, y_data = val_data
+        try:
+            predicted = model(x_data)
+            mse = torch.mean((predicted[0] - y_data) ** 2)
+            return 1 / (1 + mse)  # Convert MSE to a fitness score (higher is better)
+        except:
+            return 0
+
+    @staticmethod
+    def target_function(x):
+        return (x / 2) + 2
+    
+class MinerFactory:
+    @staticmethod
+    def get_miner(miner_type, config):
+        if miner_type == "activation":
+            return ActivationMiner(config)
+        elif miner_type == "loss":
+            return LossMiner(config)
+        elif miner_type == "simple":
+            return SimpleMiner(config)
+        else:
+            raise ValueError(f"Unknown miner type: {miner_type}")

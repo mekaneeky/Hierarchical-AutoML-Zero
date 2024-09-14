@@ -4,7 +4,7 @@ from copy import deepcopy
 from .memory import CentralMemory
 
 class FunctionGenome:
-    def __init__(self, length, central_memory, function_decoder, meta_level=0, lower_level_population=None,input_addresses=[6], output_addresses=[5]):
+    def __init__(self, length, central_memory, function_decoder, meta_level=0, lower_level_population=None,input_addresses=None, output_addresses=None):
         self.length = length
         #self.central_memory = central_memory
         #self.memory = central_memory[meta_level]
@@ -58,7 +58,7 @@ class FunctionGenome:
     def __deepcopy__(self, memo):
         # Create a new instance
         new_copy = FunctionGenome(self.length, self.central_memory, self.function_decoder, 
-                                  self.meta_level, self.lower_level_population)
+                                  self.meta_level, self.lower_level_population, input_addresses=self.input_addresses, output_addresses=self.output_addresses)
         
         # Copy simple attributes
         new_copy.gene = self.gene.copy()
@@ -181,6 +181,9 @@ class FunctionGenome:
                 #if not self.validate_memory():
                 #    print("Postmystery")
                 #    breakpoint()
+            if len(self.output_addresses) == 1:
+                return memory[self.output_addresses[0]]
+            
             return tuple(self.memory[addr] for addr in self.output_addresses)  # Assuming the final output is always stored in the first memory location
 
         return evolved_function
@@ -205,7 +208,10 @@ class FunctionGenome:
             
 
             memory[self.output_gene[i]] = output
-
+        
+        if len(self.output_addresses) == 1:
+            return memory[self.output_addresses[0]]
+        
         return tuple(self.memory[addr] for addr in self.output_addresses)  # Assuming the final output is always stored in the first memory location
 
     def mutate(self):
@@ -427,20 +433,21 @@ class HierarchicalFunctionGenome:
         return new_copy
 
 class HierarchicalGenome:
-    def __init__(self, num_meta_levels, genome_length, central_memory, function_decoder, population_size):
+    def __init__(self, num_meta_levels, genome_length, central_memory, function_decoder, population_size, input_addresses, output_addresses):
         self.num_meta_levels = num_meta_levels
         self.central_memory = central_memory
         self.function_decoder = function_decoder
-
+        self.input_addresses = input_addresses
+        self.output_addresses = output_addresses
         self.genomes = []
         current_population = []
         for meta_level in range(num_meta_levels):
             
             for _ in range(population_size):
                 if meta_level == 0: 
-                    current_population.append(FunctionGenome(genome_length, central_memory, function_decoder, meta_level=meta_level))
+                    current_population.append(FunctionGenome(genome_length, central_memory, function_decoder, meta_level=meta_level, lower_level_population=None, input_addresses=self.input_addresses, output_addresses=self.output_addresses))
                 else:
-                    current_population.append(FunctionGenome(genome_length, central_memory, function_decoder, meta_level=meta_level, lower_level_population=self.genomes[-1]))
+                    current_population.append(FunctionGenome(genome_length, central_memory, function_decoder, meta_level=meta_level, lower_level_population=self.genomes[-1],input_addresses=self.input_addresses, output_addresses=self.output_addresses))
             self.genomes.append(deepcopy(current_population))
             current_population = []
 

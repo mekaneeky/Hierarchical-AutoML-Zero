@@ -7,16 +7,19 @@ from copy import copy
 
 class AutoMLZero:
     def __init__(self, population_size, num_meta_levels, genome_length, tournament_size,
-                 central_memory, function_decoder):
+                 central_memory, function_decoder, input_addresses, output_addresses):
         self.population_size = population_size
         self.num_meta_levels = num_meta_levels
         self.genome_length = genome_length
         self.tournament_size = tournament_size
         self.central_memory = central_memory
-        self.hierarchical_genome = HierarchicalGenome(num_meta_levels, genome_length, central_memory, function_decoder, population_size)
+        self.input_addresses = input_addresses
+        self.output_addresses = output_addresses
+        self.hierarchical_genome = HierarchicalGenome(num_meta_levels, genome_length, central_memory, function_decoder, population_size, input_addresses = self.input_addresses, output_addresses=self.output_addresses)
         self.function_decoder = function_decoder
         self.fec_cache = dict()
         self.fixed_inputs = torch.randn(self.central_memory.vector_memory[0].shape[0]) #FIXME needs to adapt to input type
+        
 
     def functional_equivalence_check(self, genome):
         """
@@ -55,7 +58,9 @@ class AutoMLZero:
             self.central_memory,
             self.function_decoder,
             meta_level=level,
-            lower_level_population=self.hierarchical_genome.genomes[level - 1] if level > 0 else None
+            lower_level_population=self.hierarchical_genome.genomes[level - 1] if level > 0 else None,
+            input_addresses=self.input_addresses,
+            output_addresses=self.output_addresses
         )
         new_genome.gene = genome.gene.copy()
         new_genome.input_gene = genome.input_gene.copy()

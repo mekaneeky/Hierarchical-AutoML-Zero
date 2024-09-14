@@ -25,5 +25,5 @@ class EvolvableNN(nn.Module):
         x = x.view(-1,28*28)
         x = self.fc1(x)
         x = self.evolved_activation(x)
-        x = self.fc2(x[0])
+        x = self.fc2(x)
         return x

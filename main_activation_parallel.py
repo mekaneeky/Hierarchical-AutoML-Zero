@@ -1,3 +1,7 @@
+import argparse
+import requests
+import json
+
 import torch
 from torch.utils.data import DataLoader
 from torchvision import datasets, transforms
@@ -10,13 +14,21 @@ from automl.memory import HierarchicalMemoryArrays, CentralMemory
 from automl.function_decoder import FunctionDecoder
 from automl.unpacker import HierarchicalGenomeUnpacker
 from automl.models import EvolvableNN, BaselineNN
+from automl.gene_io import export_gene_to_json, import_gene_from_json
 
-import torch.nn as nn
+def migrate_genes(best_gene, migration_server_url, function_decoder):
+    # Submit best gene
+    requests.post(f"{migration_server_url}/submit_gene", json=export_gene_to_json(gene=best_gene))
+    
+    # Get mixed genes from server
+    response = requests.get(f"{migration_server_url}/get_mixed_genes")
+    received_genes_data = response.json()
+    
+    return [import_gene_from_json(gene_data = gene_data, function_decoder = function_decoder) for gene_data in received_genes_data]
 
-def main():
-    # Set up data
+def main(migration_server_url):
 
-
+    
     transform = transforms.Compose([transforms.ToTensor(), transforms.Normalize((0.1307,), (0.3081,))])
     train_data = datasets.MNIST('../data', train=True, download=True, transform=transform)
     val_data = datasets.MNIST('../data', train=False, transform=transform)
@@ -28,7 +40,7 @@ def main():
     tournament_size = 70
     mutation_probability = 1.0
     generations = 1000
-    generation_iters = 1000
+    generation_iters = 100
 
 
     num_scalars = 5
@@ -67,10 +79,9 @@ def main():
     evaluate_population(population, train_loader, val_loader)
     best_genome_all_time = deepcopy(max(population, key=lambda g: g.fitness))
 
-    # Evolution loop
-    for generation in tqdm(range(generations)):  # 50 generations
+    for generation in tqdm(range(generations)):
         for _ in tqdm(range(generation_iters)):
-            # Tournament selection
+            
             parent = automl.tournament_selection(population)
             
             # Create and mutate offspring
@@ -117,11 +128,28 @@ def main():
         best_genome = deepcopy(max(population, key=lambda g: g.fitness))
         if best_genome.fitness > best_genome_all_time.fitness:
             best_genome_all_time = deepcopy(best_genome)
-
+            export_gene_to_json(best_genome_all_time, "best_gene.json")
+            #push_to_huggingface(repo_name, "best_gene.json", f"Best gene (Gen {generation}, Acc {accuracy:.4f})")
+            
         print(f"Generation {generation}: Best accuracy = {best_genome.fitness:.4f}")
         print(f"Total unique algorithms seen: {len(automl.fec_cache.keys())}")
+
+        # Migration step
+        if generation % 20 == 0:  # Migrate every 5 generations
+            best_gene = max(population, key=lambda g: g.fitness)
+            received_genes = migrate_genes(best_gene, migration_server_url, function_decoder)
+            train_loader = DataLoader(train_data, batch_size=64, shuffle=True)
+            val_loader = DataLoader(val_data, batch_size=128, shuffle=False)
+            evaluate_population(received_genes, train_loader, val_loader)
+            
+            # Integrate received genes into population
+            for received_gene in received_genes:
+                if received_gene.fitness > min(population, key=lambda g: g.fitness).fitness:
+                    population.pop(0)  # Remove worst gene
+                    population.append(received_gene)
+
     # Get the best evolved activation function
-    #best_genome_idx, best_genome = max(enumerate(population), key=lambda x: x[1].fitness) 
+    best_genome_idx, best_genome = max(enumerate(population), key=lambda x: x[1].fitness) 
     print(f"Evolution complete. Best accuracy: {best_genome_all_time.fitness:.4f}")
 
     # You can now use best_genome to create a model with the best evolved activation function
@@ -180,9 +208,10 @@ def evaluate(model, val_loader):
             correct += predicted.eq(targets).sum().item()
     return correct / total
 
+
 if __name__ == "__main__":
-    best_model, best_genome, best_genome_idx, population, best_genome_all_time = main()
-    unpacker = HierarchicalGenomeUnpacker()
-    print(unpacker.unpack_function_genome(best_genome_all_time))
-    print(best_genome_all_time.gene)
-    breakpoint()
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--migration_server_url", required=True, help="URL of the migration server")
+    args = parser.parse_args()
+    
+    main(args.migration_server_url)

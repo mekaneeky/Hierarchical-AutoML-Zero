@@ -4,7 +4,7 @@ from automl.genome import FunctionGenome
 from automl.memory import CentralMemory
 from automl.function_decoder import FunctionDecoder
 
-def export_gene_to_json(gene, filename):
+def export_gene_to_json(gene, filename = None):
     """
     Export a FunctionGenome object to a JSON file.
     
@@ -35,10 +35,13 @@ def export_gene_to_json(gene, filename):
         }
     }
     
+    if filename is None:
+        return gene_data
+    
     with open(filename, 'w') as f:
         json.dump(gene_data, f, indent=2)
 
-def import_gene_from_json(filename, function_decoder):
+def import_gene_from_json(gene_data = None, filename = None, function_decoder=None):
     """
     Import a FunctionGenome object from a JSON file.
     
@@ -49,8 +52,9 @@ def import_gene_from_json(filename, function_decoder):
     Returns:
     FunctionGenome: The imported gene
     """
-    with open(filename, 'r') as f:
-        gene_data = json.load(f)
+    if gene_data is None:
+        with open(filename, 'r') as f:
+            gene_data = json.load(f)
     
     # Recreate the CentralMemory object
     memory = CentralMemory(
@@ -80,9 +84,11 @@ def import_gene_from_json(filename, function_decoder):
     gene.row_fixed = gene_data['row_fixed']
     gene.column_fixed = gene_data['column_fixed']
     gene.version = gene_data['version']
-    gene.fitness = gene_data['fitness']
+    gene.fitness = None#gene_data['fitness']
     
     return gene
+
+
 
 # Example usage:
 if __name__ == "__main__":
