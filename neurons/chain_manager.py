@@ -76,23 +76,31 @@ class ChainMultiAddressStore:
         # Compress the multiaddress
 
         # Wrap calls to the subtensor in a subprocess with a timeout to handle potential hangs.
-        partial = functools.partial(
-            self.subtensor.commit,
+        # partial = functools.partial(
+        #     self.subtensor.commit,
+        #     self.wallet,
+        #     self.subnet_uid,
+        #     hf_repo,
+        # )
+        # run_in_subprocess(partial, 60)
+
+        self.subtensor.commit(
             self.wallet,
             self.subnet_uid,
-            hf_repo,
+            hf_repo
         )
-        run_in_subprocess(partial, 60)
 
     def retrieve_hf_repo(self, hotkey: str) -> Optional[str]:
         """Retrieves and decompresses multiaddress on this subnet for specific hotkey"""
         # Wrap calls to the subtensor in a subprocess with a timeout to handle potential hangs.
-        partial = functools.partial(
-            bt.extrinsics.serving.get_metadata, self.subtensor, self.subnet_uid, hotkey
-        )
+
+        # partial = functools.partial(
+        #     bt.extrinsics.serving.get_metadata, self.subtensor, self.subnet_uid, hotkey
+        # )
 
         try:
-            metadata = run_in_subprocess(partial, 60)
+            #metadata = run_in_subprocess(partial, 60)
+            metadata = bt.extrinsics.serving.get_metadata( self.subtensor, self.subnet_uid, hotkey)
         except:
             metadata = None
             logging.warning(f"Failed to retreive multiaddress for: {hotkey}")

@@ -66,13 +66,21 @@ def import_gene_from_json(gene_data = None, filename = None, function_decoder=No
         tensor_size=tuple(gene_data['memory']['tensor_size'])
     )
     
-    # Create a new FunctionGenome object
-    gene = FunctionGenome(
-        length=gene_data['length'],
-        central_memory=memory,
-        function_decoder=function_decoder,
-        meta_level=gene_data['meta_level']
-    )
+    # Create a new FunctionGenome 
+    if function_decoder:
+        gene = FunctionGenome(
+            length=gene_data['length'],
+            central_memory=memory,
+            function_decoder=function_decoder,
+            meta_level=gene_data['meta_level']
+        )
+    else:
+        gene = FunctionGenome(
+            length=gene_data['length'],
+            central_memory=memory,
+            function_decoder=FunctionDecoder(),
+            meta_level=gene_data['meta_level']
+        )
     
     # Populate the gene with the imported data
     gene.gene = gene_data['gene']

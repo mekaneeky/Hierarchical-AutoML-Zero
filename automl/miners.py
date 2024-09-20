@@ -7,6 +7,8 @@ import torch
 from torch.utils.data import DataLoader
 from torchvision import datasets, transforms
 from tqdm import tqdm
+import logging 
+import pandas as pd
 
 from automl.evolutionary_algorithm import AutoMLZero
 from automl.memory import CentralMemory
@@ -15,27 +17,39 @@ from automl.models import BaselineNN, EvolvableNN
 from automl.gene_io import export_gene_to_json, import_gene_from_json
 
 
-
 class BaseMiner(ABC):
     def __init__(self, config):
         self.config = config
         self.central_memory = CentralMemory(
-            config['num_scalars'], config['num_vectors'], config['num_tensors'],
-            config['scalar_size'], config['vector_size'], config['tensor_size']
+            config.Miner.num_scalars, config.Miner.num_vectors, config.Miner.num_tensors,
+            config.Miner.scalar_size, config.Miner.vector_size, config.Miner.tensor_size
         )
         self.function_decoder = FunctionDecoder()
         self.automl = AutoMLZero(
-            population_size=config['population_size'],
-            num_meta_levels=config['num_meta_levels'],
-            genome_length=config['genome_length'],
-            tournament_size=config['tournament_size'],
+            population_size=config.Miner.population_size,
+            num_meta_levels=config.Miner.num_meta_levels,
+            genome_length=config.Miner.genome_length,
+            tournament_size=config.Miner.tournament_size,
             central_memory=self.central_memory,
             function_decoder=self.function_decoder,
-            input_addresses=config["input_addresses"],
-            output_addresses=config['output_addresses']
+            input_addresses=config.Miner.input_addresses,
+            output_addresses=config.Miner.output_addresses
         )
-        self.migration_server_url = config.get('migration_server_url', None)
-        self.migration_interval = config.get('migration_interval', 20)
+    
+        self.migration_server_url = config.Miner.migration_server_url
+        self.migration_interval = config.Miner.migration_interval
+        self.setup_logging()
+        self.metrics_file = config.metrics_file
+        self.metrics_data = []
+
+    def log_metrics(self, generation, accuracy):
+        self.metrics_data.append({'generation': generation, 'accuracy': accuracy})
+        
+        # Save to CSV every 10 generations
+        if len(self.metrics_data) % 10 == 0:
+            df = pd.DataFrame(self.metrics_data)
+            df.to_csv(self.metrics_file, index=False)
+
 
     def migrate_genes(self, best_gene):
         if not self.migration_server_url:
@@ -53,23 +67,23 @@ class BaseMiner(ABC):
                 for gene_data in received_genes_data]
     
     def push_to_huggingface(self, file_path, commit_message):
-        if not self.config["huggingface_repo"]:
-            print("No repository name provided. Skipping push to Hugging Face.")
+        if not self.config.gene_repo:
+            logging.info("No repository name provided. Skipping push to Hugging Face.")
             return
 
         api = HfApi()
-        repo_url = f"https://huggingface.co/{self.config["huggingface_repo"]}"
+        repo_url = f"https://huggingface.co/{self.config.gene_repo}"
         
-        if not os.path.exists(self.config["huggingface_repo"]):
-            Repository(self.config["huggingface_repo"], clone_from=repo_url)
+        if not os.path.exists(self.config.gene_repo):
+            Repository(self.config.gene_repo, clone_from=repo_url)
         
-        repo = Repository(self.config["huggingface_repo"], repo_url)
+        repo = Repository(self.config.gene_repo, repo_url)
         repo.git_pull()
         
         api.upload_file(
             path_or_fileobj=file_path,
             path_in_repo=file_path,
-            repo_id=self.config["huggingface_repo"],
+            repo_id=self.config.gene_repo,
             commit_message=commit_message
         )
 
@@ -81,7 +95,7 @@ class BaseMiner(ABC):
         baseline_model = self.create_baseline_model()
         self.train(baseline_model, train_loader)
         self.baseline_accuracy = self.evaluate(baseline_model, val_loader)
-        print(f"Baseline model accuracy: {self.baseline_accuracy:.4f}")
+        logging.info(f"Baseline model accuracy: {self.baseline_accuracy:.4f}")
     
     @abstractmethod
     def load_data(self):
@@ -106,8 +120,8 @@ class BaseMiner(ABC):
         self.evaluate_population(population, train_loader, val_loader)
         best_genome_all_time = deepcopy(max(population, key=lambda g: g.fitness))
 
-        for generation in tqdm(range(self.config['generations'])):
-            for _ in tqdm(range(self.config['generation_iters'])):
+        for generation in tqdm(range(self.config.Miner.generations)):
+            for _ in tqdm(range(self.config.Miner.generation_iters)):
                 parent = self.automl.tournament_selection(population)
                 offspring = self.automl.mutate(parent, 0)
                 
@@ -124,23 +138,23 @@ class BaseMiner(ABC):
                     self.automl.fec_cache[fingerprint] = accuracy
                     population.append(offspring)
                     population.pop(0)
-
-                    if accuracy > best_genome_all_time.fitness:
-                        best_genome_all_time = deepcopy(offspring)
-                        export_gene_to_json(best_genome_all_time, "best_gene.json")
-                        self.push_to_huggingface("best_gene.json", f"Best gene (Gen {generation}, Acc {accuracy:.4f})")
-
+                    
                 except Exception as e:
                     offspring.fitness = -9999
                     self.automl.fec_cache[fingerprint] = -9999
 
             best_genome = deepcopy(max(population, key=lambda g: g.fitness))
+            self.log_metrics(generation, best_genome.fitness)
+            
             if best_genome.fitness > best_genome_all_time.fitness:
                 best_genome_all_time = deepcopy(best_genome)
+                logging.info(f"New best gene found. Pushing to {self.config.gene_repo}")
+                export_gene_to_json(best_genome_all_time, "best_gene.json")
+                self.push_to_huggingface("best_gene.json", f"Best gene (Gen {generation}, Acc {accuracy:.4f})")
 
-            print(f"Generation {generation}: Best accuracy = {best_genome.fitness:.4f}")
-            print(f"Improvement over baseline: {best_genome.fitness - self.baseline_accuracy:.4f}")
-            print(f"Total unique algorithms seen: {len(self.automl.fec_cache.keys())}")
+            logging.info(f"Generation {generation}: Best accuracy = {best_genome.fitness:.4f}")
+            logging.info(f"Improvement over baseline: {best_genome.fitness - self.baseline_accuracy:.4f}")
+            logging.info(f"Total unique algorithms seen: {len(self.automl.fec_cache.keys())}")
 
             if self.migration_server_url and generation % self.migration_interval == 0:
                 received_genes = self.migrate_genes(best_genome)
@@ -152,7 +166,7 @@ class BaseMiner(ABC):
                         population.pop(0)  # Remove worst gene
                         population.append(received_gene)
 
-
+        
         return best_genome_all_time
     
     def evaluate_population(self, population, train_loader, val_loader):
@@ -164,7 +178,74 @@ class BaseMiner(ABC):
             except:
                 genome.fitness = -9999
 
-class ActivationMiner(BaseMiner):
+    @staticmethod
+    def setup_logging(log_file='miner.log'):
+        logging.basicConfig(
+            filename=log_file,
+            level=logging.INFO,
+            format='%(asctime)s - %(levelname)s - %(message)s',
+            datefmt='%Y-%m-%d %H:%M:%S'
+        )
+
+class BaseMiningPoolMiner(BaseMiner):
+    def __init__(self, config, pool_url):
+        super().__init__(config)
+        self.pool_url = pool_url
+
+    def mine_in_pool(self):
+        # Register with the pool
+        self.register_with_pool()
+
+        # Get task from the pool
+        task = self.get_task_from_pool()
+
+        # Update config with pool task if necessary
+        self.update_config_with_task(task)
+
+        # Perform mining
+        best_genome = self.mine()
+
+        # Submit result to the pool
+        self.submit_result_to_pool(best_genome)
+
+        # Get rewards
+        rewards = self.get_rewards_from_pool()
+
+        return rewards
+
+    def register_with_pool(self):
+        data = self._prepare_request_data("register")
+        response = requests.post(f"{self.pool_url}/register", json=data)
+        return response.json()['success']
+
+    def get_task_from_pool(self):
+        data = self._prepare_request_data("get_task")
+        response = requests.get(f"{self.pool_url}/get_task", json=data)
+        return response.json()
+
+    def submit_result_to_pool(self, best_genome):
+        data = self._prepare_request_data("submit_result")
+        data["result"] = export_gene_to_json(best_genome)
+        response = requests.post(f"{self.pool_url}/submit_result", json=data)
+        return response.json()['success']
+
+    def get_rewards_from_pool(self):
+        data = self._prepare_request_data("get_rewards")
+        response = requests.get(f"{self.pool_url}/get_rewards", json=data)
+        return response.json()
+
+    def _prepare_request_data(self, message):
+        return {
+            "public_address": self.config.wallet.hotkey.ss58_address,
+            "signature": self.config.wallet.hotkey.sign(message).hex(),
+            "message": message
+        }
+
+    def update_config_with_task(self, task):
+        # Update miner config with task-specific parameters if needed
+        pass
+
+class ActivationMiner(BaseMiningPoolMiner):
     def load_data(self):
         transform = transforms.Compose([transforms.ToTensor(), transforms.Normalize((0.1307,), (0.3081,))])
         train_data = datasets.MNIST('../data', train=True, download=True, transform=transform)
@@ -236,7 +317,7 @@ class EvolvedLoss(torch.nn.Module):
         loss = memory[0].mean() if memory[0].numel() > 1 else memory[0]
         return loss
 
-class LossMiner(BaseMiner):
+class LossMiner(BaseMiningPoolMiner):
     def load_data(self):
         transform = transforms.Compose([transforms.ToTensor(), transforms.Normalize((0.1307,), (0.3081,))])
         train_data = datasets.MNIST('../data', train=True, download=True, transform=transform)
@@ -279,7 +360,7 @@ class LossMiner(BaseMiner):
     def create_baseline_model(self):
         return BaselineNN(input_size=28*28, hidden_size=128, output_size=10), torch.nn.CrossEntropyLoss()
     
-class SimpleMiner(BaseMiner):
+class SimpleMiner(BaseMiningPoolMiner):
     def load_data(self):
         x_data = torch.linspace(0, 10, 100)
         y_data = self.target_function(x_data)
@@ -307,7 +388,8 @@ class SimpleMiner(BaseMiner):
     
 class MinerFactory:
     @staticmethod
-    def get_miner(miner_type, config):
+    def get_miner(config):
+        miner_type = config.Miner.miner_type
         if miner_type == "activation":
             return ActivationMiner(config)
         elif miner_type == "loss":

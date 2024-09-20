@@ -24,7 +24,7 @@ class HFManager:
     ):
     
         # Initializes the HFManager with the necessary repository and authentication details.
-        self.gene_repo = gene_repo
+        self.gene_repo_id = gene_repo_id
         
         self.hf_token = hf_token
         self.device = device
