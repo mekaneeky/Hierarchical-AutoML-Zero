@@ -4,7 +4,7 @@ Welcome to Hivetrain's open-source, distributed AutoML subnet!
 
 ## About
 
-Hivetrain is back with an innovative approach to distributed AutoML. Our goal is to tackle Jürgen Schmidhuber's challenge of "inventing an AI scientist smarter than himself so that he can retire". We're creating an incentivization structure that rewards the development of improved neural network components and potentially new algorithms that surpass the current state-of-the-art.
+Hivetrain is back with an innovative approach to distributed AutoML. Our goal is to tackle Jürgen Schmidhuber's challenge of "inventing an AI scientist smarter than himself so that he can retire". We're creating an incentivization structure that rewards the development of improved neural network components and potentially new algorithms that surpass the current state-of-the-art. Our approach is inspired by the AutoML Zero paper where we construct a genetic code that is evolvable and allows for the gradual building of increasingly complex mathematical functions using evolutionary and gradient based approaches. 
 
 ## Current Focus
 
@@ -51,14 +51,6 @@ For detailed instructions on setting up and running miners and validators, pleas
 Join our community channels for discussions, support, and updates:
 - [Discord](https://discord.com/channels/799672011265015819/1174839377659183174)
 
-## Contributing
-
-We welcome contributions! Please see our [Contributing Guidelines](link-to-contributing.md) for more information.
-
-## License
-
-This project is licensed under the [MIT License](link-to-license).
-
 ---
 
-We're excited to have you join us on this journey of distributed AutoML. Together, we can push the boundaries of AI and machine learning!
+We're excited to have you join us on this journey of distributed AutoML. Let's build the hive.
