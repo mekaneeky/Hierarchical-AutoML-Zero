@@ -8,7 +8,7 @@ Hivetrain is back with an innovative approach to distributed AutoML. Our goal is
 
 ## Current Focus
 
-On testnet, we're starting with a loss function search. This is just the beginning of our journey into distributed AutoML.
+Currently running on Bittensor testnet-100, we're starting with a loss function search. This is just the beginning of our journey into distributed AutoML. 
 
 ## Participation
 
