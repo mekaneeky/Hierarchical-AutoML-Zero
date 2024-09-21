@@ -44,7 +44,7 @@ A: Distributed training is a technically complex problem. We're still developing
 
 ## Getting Started
 
-For detailed instructions on setting up and running miners and validators, please refer to our [Miner and Validator Tutorial](link-to-tutorial.md).
+For detailed instructions on setting up and running miners and validators, please refer to our [Miner and Validator Tutorial](docs/tutorial.md).
 
 ## Community and Support
 
