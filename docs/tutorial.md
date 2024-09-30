@@ -114,9 +114,11 @@ In `config.py`, adjust the `Validator` class settings:
 class Validator:
     validation_interval = 300  # Interval between validations in seconds
     validator_type = "loss"  # or "activation"
-    top_k = 10  # Number of top miners to distribute scores to
+    top_k = 10  # Number of top miners to distribute scores to. 
     min_score = 0.0  # Minimum score for miners not in the top-k
 ```
+
+Editing top_k and min_score will lead to mismatch with other validators and loss of vtrust. Should only be updated when updated across the entire subnet.
 
 ### 4. Run the Validator
 
