@@ -151,7 +151,7 @@ class BaseValidator(ABC):
                         return None
                     
                     gene_path = api.hf_hub_download(repo_id=repo_name, filename="best_gene.json")
-                    gene_content = import_gene_from_json(filename=gene_path)
+                    gene_content = import_gene_from_json(filename=gene_path, config=self.config)
                     os.remove(gene_path)
                     return gene_content
                 else:
