@@ -133,7 +133,7 @@ class BaseValidator(ABC):
                 hotkey_ss58=self.bittensor_network.wallet.hotkey.ss58_address
             )
         except:
-            logging.warn("Failed to check registration, assuming still registered")
+            logging.warning("Failed to check registration, assuming still registered")
             return True
 
     def receive_gene_from_hf(self, repo_name):
@@ -141,10 +141,23 @@ class BaseValidator(ABC):
         try:
             file_info = api.list_repo_files(repo_id=repo_name)
             if "best_gene.json" in file_info:
-                gene_path = api.hf_hub_download(repo_id=repo_name, filename="best_gene.json")
-                gene_content = import_gene_from_json(filename=gene_path)
-                os.remove(gene_path)
-                return gene_content
+                file_details = api.list_repo_tree(repo_id=repo_name, path="best_gene.json")
+                if file_details:
+                    file_size = file_details[0].size  # Size in bytes
+                    max_size = self.config.max_gene_size  # 1 MB limit (adjust as needed) 1024*1024
+                    
+                    if file_size > max_size:
+                        logging.warning(f"Gene file size ({file_size} bytes) exceeds limit ({max_size} bytes). Skipping download.")
+                        return None
+                    
+                    gene_path = api.hf_hub_download(repo_id=repo_name, filename="best_gene.json")
+                    gene_content = import_gene_from_json(filename=gene_path)
+                    os.remove(gene_path)
+                    return gene_content
+                else:
+                    logging.warning("Could not retrieve file details for best_gene.json")
+            else:
+                logging.info("best_gene.json not found in the repository")
         except Exception as e:
             logging.info(f"Error retrieving gene from Hugging Face: {str(e)}")
         return None

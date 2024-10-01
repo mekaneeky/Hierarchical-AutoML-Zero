@@ -160,6 +160,6 @@ class BittensorNetwork:
                 cls.resync_metagraph(lite)
                 cls.last_sync_time = time.time()
             except Exception as e:
-                logging.warn(f"Failed to resync metagraph: {e}")
+                logging.warning(f"Failed to resync metagraph: {e}")
         else:
             logging.info("Metagraph Sync Interval not yet passed")

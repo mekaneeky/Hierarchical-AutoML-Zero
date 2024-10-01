@@ -120,36 +120,36 @@ class FunctionDecoder:
     @staticmethod
     def uniform_scalar(*args):
         low, high = args[2], args[3]
-        return torch.empty(args[0].shape).uniform_(low, high)
+        return torch.empty(args[0].shape).uniform_(low.item(), high.item())
 
     @staticmethod
     def uniform_vector(*args):
         low, high = args[2], args[3]
         size = args[0].shape
-        return torch.empty(size).uniform_(low, high)
+        return torch.empty(size).uniform_(low.item(), high.item())
 
     @staticmethod
     def uniform_matrix(*args):
         low, high = args[2], args[3]
         rows, cols = args[0].shape
-        return torch.empty(rows, cols).uniform_(low, high)
+        return torch.empty(rows, cols).uniform_(low.item(), high.item())
 
     @staticmethod
     def gaussian_scalar(*args):
         mean, std = args[2], args[3]
-        return torch.empty(1).normal_(mean, std)
+        return torch.empty(1).normal_(mean.item(), std.item())
 
     @staticmethod
     def gaussian_vector(*args):
         mean, std = args[2], args[3]
         size = args[0].shape[1]
-        return torch.empty(size).normal_(mean, std)
+        return torch.empty(size).normal_(mean.item(), std.item())
 
     @staticmethod
     def gaussian_matrix(*args):
         mean, std = args[2], args[3]
         rows, cols = args[0].shape
-        return torch.empty(rows, cols).normal_(mean, std)
+        return torch.empty(rows, cols).normal_(mean.item(), std.item())
 
     @staticmethod
     def set_constant_vector(*args):

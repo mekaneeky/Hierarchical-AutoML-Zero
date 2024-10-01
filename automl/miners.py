@@ -21,6 +21,8 @@ from automl.destinations import PushMixin, PoolPushDestination, HuggingFacePushD
 class BaseMiner(ABC, PushMixin):
     def __init__(self, config):
         self.config = config
+        self.device = self.config.device
+
         self.central_memory = CentralMemory(
             config.Miner.num_scalars, config.Miner.num_vectors, config.Miner.num_tensors,
             config.Miner.scalar_size, config.Miner.vector_size, config.Miner.tensor_size
@@ -111,7 +113,7 @@ class BaseMiner(ABC, PushMixin):
         )
 
     def create_baseline_model(self):
-        return BaselineNN(input_size=28*28, hidden_size=128, output_size=10)
+        return BaselineNN(input_size=28*28, hidden_size=128, output_size=10).to(self.device)
 
     def measure_baseline(self):
         train_loader, val_loader = self.load_data()
@@ -163,8 +165,8 @@ class BaseMiner(ABC, PushMixin):
                     population.pop(0)
                     
                 except Exception as e:
-                    offspring.fitness = -9999
-                    self.automl.fec_cache[fingerprint] = -9999
+                   offspring.fitness = -9999
+                   self.automl.fec_cache[fingerprint] = -9999
 
             best_genome = deepcopy(max(population, key=lambda g: g.fitness))
             self.log_metrics(generation, best_genome.fitness)
@@ -288,13 +290,15 @@ class ActivationMiner(BaseMiner):
             hidden_size=128, 
             output_size=10, 
             evolved_activation=genome.function()
-        )
+        ).to(self.device)
 
     def train(self, model, train_loader):
         optimizer = torch.optim.Adam(model.parameters())
         criterion = torch.nn.CrossEntropyLoss()
         model.train()
         for idx, (inputs, targets) in enumerate(train_loader):
+            inputs = inputs.to(self.device)
+            targets = targets.to(self.device)
             if idx == 1:
                 break
             optimizer.zero_grad()
@@ -309,6 +313,8 @@ class ActivationMiner(BaseMiner):
         total = 0
         with torch.no_grad():
             for idx, (inputs, targets) in enumerate(val_loader):
+                inputs = inputs.to(self.device)
+                targets = targets.to(self.device)
                 if idx > 10:
                     return correct/total
                 outputs = model(inputs)
@@ -318,13 +324,14 @@ class ActivationMiner(BaseMiner):
         return correct / total
     
 class EvolvedLoss(torch.nn.Module):
-    def __init__(self, genome):
+    def __init__(self, genome, device = "cpu"):
         super().__init__()
         self.genome = genome
+        self.device = device
 
     def forward(self, outputs, targets):
-        outputs = outputs.detach().float().requires_grad_()
-        targets = targets.detach().float().requires_grad_()
+        outputs = outputs.detach().float().requires_grad_().to(self.device)
+        targets = targets.detach().float().requires_grad_().to(self.device)
         
         memory = self.genome.memory
         memory.reset()
@@ -334,10 +341,10 @@ class EvolvedLoss(torch.nn.Module):
 
         for i, op in enumerate(self.genome.gene):
             func = self.genome.function_decoder.decoding_map[op][0]
-            input1 = memory[self.genome.input_gene[i]]
-            input2 = memory[self.genome.input_gene_2[i]]
-            constant = torch.tensor(self.genome.constants_gene[i], requires_grad=True)
-            constant_2 = torch.tensor(self.genome.constants_gene_2[i], requires_grad=True)
+            input1 = memory[self.genome.input_gene[i]].to(self.device)
+            input2 = memory[self.genome.input_gene_2[i]].to(self.device)
+            constant = torch.tensor(self.genome.constants_gene[i], requires_grad=True).to(self.device)
+            constant_2 = torch.tensor(self.genome.constants_gene_2[i], requires_grad=True).to(self.device)
             
             output = func(input1, input2, constant, constant_2, self.genome.row_fixed, self.genome.column_fixed)
             memory[self.genome.output_gene[i]] = output
@@ -355,15 +362,20 @@ class LossMiner(BaseMiner):
         return train_loader, val_loader
 
     def create_model(self, genome):
-        return BaselineNN(input_size=28*28, hidden_size=128, output_size=10), EvolvedLoss(genome)
+        return BaselineNN(input_size=28*28, hidden_size=128, output_size=10).to(self.device), EvolvedLoss(genome, self.device)
 
     def train(self, model_and_loss, train_loader):
         model, loss_function = model_and_loss
         optimizer = torch.optim.Adam(model.parameters())
         model.train()
         for idx, (inputs, targets) in enumerate(train_loader):
+            
+            inputs = inputs.to(self.device)
+            targets = targets.to(self.device)
+
             if idx == 1:
                 break
+
             optimizer.zero_grad()
             outputs = model(inputs)
             loss = loss_function(outputs, targets)
@@ -377,6 +389,8 @@ class LossMiner(BaseMiner):
         total = 0
         with torch.no_grad():
             for idx, (inputs, targets) in enumerate(val_loader):
+                inputs = inputs.to(self.device)
+                targets = targets.to(self.device)
                 if idx > 10:
                     break
                 outputs = model(inputs)
@@ -431,7 +445,6 @@ class SimpleMinerPool(SimpleMiner, BaseMiningPoolMiner):
 
 class SimpleMinerHF(SimpleMiner, BaseHuggingFaceMiner):
     pass
-
 
 class MinerFactory:
     @staticmethod

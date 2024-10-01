@@ -60,7 +60,44 @@ def export_gene_to_json(gene, filename = None):
     with open(filename, 'w') as f:
         json.dump(gene_data, f, indent=2)
 
-def import_gene_from_json(gene_data = None, filename = None, function_decoder=None):
+def calculate_total_size(shape):
+    size = 1
+    for dim in shape:
+        size *= dim
+    return size    
+
+def validate_gene_size(gene_data, config):
+    """
+    Validate the size of gene data against configuration limits.
+    
+    Args:
+    gene_data (dict): The gene data to validate
+    config (object): Configuration object containing size limits
+    
+    Raises:
+    ValueError: If any size limit is exceeded
+    """
+    checks = [
+        ('memory.num_scalars', lambda: gene_data['memory']['num_scalars'], config.max_num_scalars),
+        ('memory.num_vectors', lambda: gene_data['memory']['num_vectors'], config.max_num_vectors),
+        ('memory.num_tensors', lambda: gene_data['memory']['num_tensors'], config.max_num_tensors),
+        ('memory.vector_size', lambda: calculate_total_size(gene_data['memory']['vector_size']), config.max_vector_size),
+        ('memory.tensor_size', lambda: calculate_total_size(gene_data['memory']['tensor_size']), config.max_tensor_size),
+        ('length', lambda: gene_data['length'], config.max_gene_length),
+        ('input_gene', lambda: len(gene_data['input_gene']), config.max_gene_length),
+        ('input_gene_2', lambda: len(gene_data['input_gene_2']), config.max_gene_length),
+        ('output_gene', lambda: len(gene_data['output_gene']), config.max_gene_length),
+        ('constants_gene', lambda: len(gene_data['constants_gene']), config.max_gene_length),
+        ('constants_gene_2', lambda: len(gene_data['constants_gene_2']), config.max_gene_length),
+        ('row_fixed', lambda: len(gene_data['row_fixed']), config.max_gene_length),
+        ('column_fixed', lambda: len(gene_data['column_fixed']), config.max_gene_length),
+    ]
+    
+    for name, size_func, limit in checks:
+        if size_func() > limit:
+            raise ValueError(f"Gene size exceeded: {name}")
+
+def import_gene_from_json(gene_data = None, filename = None, function_decoder=None, config= None):
     """
     Import a FunctionGenome object from a JSON file.
     
@@ -74,7 +111,10 @@ def import_gene_from_json(gene_data = None, filename = None, function_decoder=No
     if gene_data is None:
         with open(filename, 'r') as f:
             gene_data = json.load(f)
-    
+
+    if config is not None:
+        validate_gene_size(gene_data, config)
+
     # Recreate the CentralMemory object
     memory = CentralMemory(
         num_scalars=gene_data['memory']['num_scalars'],
