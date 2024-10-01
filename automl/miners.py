@@ -18,10 +18,15 @@ from automl.models import BaselineNN, EvolvableNN
 from automl.gene_io import export_gene_to_json, import_gene_from_json
 from automl.destinations import PushMixin, PoolPushDestination, HuggingFacePushDestination
 
+from automl.utils import set_seed
+
 class BaseMiner(ABC, PushMixin):
     def __init__(self, config):
         self.config = config
         self.device = self.config.device
+        self.seed = self.config.seed
+
+        set_seed(self.seed)
 
         self.central_memory = CentralMemory(
             config.Miner.num_scalars, config.Miner.num_vectors, config.Miner.num_tensors,
@@ -280,8 +285,8 @@ class ActivationMiner(BaseMiner):
         transform = transforms.Compose([transforms.ToTensor(), transforms.Normalize((0.1307,), (0.3081,))])
         train_data = datasets.MNIST('../data', train=True, download=True, transform=transform)
         val_data = datasets.MNIST('../data', train=False, transform=transform)
-        train_loader = DataLoader(train_data, batch_size=64, shuffle=True)
-        val_loader = DataLoader(val_data, batch_size=128, shuffle=False)
+        train_loader = DataLoader(train_data, batch_size=64, shuffle=True, generator=torch.Generator().manual_seed(self.seed))
+        val_loader = DataLoader(val_data, batch_size=128, shuffle=False, generator=torch.Generator().manual_seed(self.seed))
         return train_loader, val_loader
 
     def create_model(self, genome):
@@ -308,6 +313,7 @@ class ActivationMiner(BaseMiner):
             optimizer.step()
 
     def evaluate(self, model, val_loader):
+        set_seed(self.seed)
         model.eval()
         correct = 0
         total = 0
@@ -357,8 +363,8 @@ class LossMiner(BaseMiner):
         transform = transforms.Compose([transforms.ToTensor(), transforms.Normalize((0.1307,), (0.3081,))])
         train_data = datasets.MNIST('../data', train=True, download=True, transform=transform)
         val_data = datasets.MNIST('../data', train=False, transform=transform)
-        train_loader = DataLoader(train_data, batch_size=128, shuffle=True)
-        val_loader = DataLoader(val_data, batch_size=128, shuffle=False)
+        train_loader = DataLoader(train_data, batch_size=128, shuffle=True, generator=torch.Generator().manual_seed(self.seed))
+        val_loader = DataLoader(val_data, batch_size=128, shuffle=False, generator=torch.Generator().manual_seed(self.seed))
         return train_loader, val_loader
 
     def create_model(self, genome):
@@ -383,6 +389,7 @@ class LossMiner(BaseMiner):
             optimizer.step()
 
     def evaluate(self, model_and_loss, val_loader):
+        set_seed(self.seed)
         model, _ = model_and_loss
         model.eval()
         correct = 0
@@ -416,6 +423,7 @@ class SimpleMiner(BaseMiner):
         pass
 
     def evaluate(self, model, val_data):
+        set_seed(self.seed)
         x_data, y_data = val_data
         try:
             predicted = model(x_data)

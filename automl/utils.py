@@ -1,5 +1,6 @@
 import numpy as np
 import torch
+import random
 
 def tensor_to_numpy(tensor):
     return tensor.cpu().numpy() if tensor.is_cuda else tensor.numpy()
@@ -22,3 +23,11 @@ def ensure_tensor(data):
         return data
     else:
         return torch.tensor(data)
+    
+def set_seed(seed):
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed_all(seed)
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = False
+    np.random.seed(seed)
+    random.seed(seed)

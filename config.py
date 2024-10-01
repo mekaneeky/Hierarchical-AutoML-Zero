@@ -6,6 +6,7 @@ class config:
     hf_token = "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"
     gene_repo = "mekaneeky/testing-repo-4"
     metrics_file = "metrics.csv"
+    seed = 42
     # Hugging Face Configuration
 
     ## Safety parameters (avoid OOM/DOS)

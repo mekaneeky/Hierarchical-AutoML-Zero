@@ -13,6 +13,7 @@ from huggingface_hub import HfApi, Repository
 from automl.models import EvolvableNN, BaselineNN
 from automl.gene_io import import_gene_from_json
 from automl.function_decoder import FunctionDecoder
+from automl.utils import set_seed
 
 class BaseValidator(ABC):
     def __init__(self, config):
@@ -28,6 +29,9 @@ class BaseValidator(ABC):
         #self.setup_logging()
         self.metrics_file = config.metrics_file
         self.metrics_data = []
+        self.seed = self.config.seed
+
+        set_seed(self.seed)
 
     def log_metrics(self, iteration, scores):
         self.metrics_data.append({'iteration': iteration, **scores})
@@ -60,6 +64,8 @@ class BaseValidator(ABC):
         logging.info(f"Baseline model accuracy: {self.base_accuracy:.4f}")
 
     def validate_and_score(self):
+        set_seed(self.seed)
+
         logging.info("Receiving genes from chain")
         self.bittensor_network.sync(lite=True)
         
@@ -183,8 +189,8 @@ class ActivationValidator(BaseValidator):
         transform = transforms.Compose([transforms.ToTensor(), transforms.Normalize((0.1307,), (0.3081,))])
         train_data = datasets.MNIST('../data', train=True, download=True, transform=transform)
         val_data = datasets.MNIST('../data', train=False, transform=transform)
-        train_loader = DataLoader(train_data, batch_size=64, shuffle=True)
-        val_loader = DataLoader(val_data, batch_size=128, shuffle=False)
+        train_loader = DataLoader(train_data, batch_size=64, shuffle=True, generator=torch.Generator().manual_seed(self.seed))
+        val_loader = DataLoader(val_data, batch_size=128, shuffle=False, generator=torch.Generator().manual_seed(self.seed))
         return train_loader, val_loader
 
     def create_model(self, gene):
@@ -196,6 +202,7 @@ class ActivationValidator(BaseValidator):
         )
 
     def evaluate(self, model, val_loader):
+        set_seed(self.seed)
         model.eval()
         correct = 0
         total = 0
@@ -241,14 +248,15 @@ class LossValidator(BaseValidator):
         transform = transforms.Compose([transforms.ToTensor(), transforms.Normalize((0.1307,), (0.3081,))])
         train_data = datasets.MNIST('../data', train=True, download=True, transform=transform)
         val_data = datasets.MNIST('../data', train=False, transform=transform)
-        train_loader = DataLoader(train_data, batch_size=128, shuffle=True)
-        val_loader = DataLoader(val_data, batch_size=128, shuffle=False)
+        train_loader = DataLoader(train_data, batch_size=128, shuffle=True, generator=torch.Generator().manual_seed(self.seed))
+        val_loader = DataLoader(val_data, batch_size=128, shuffle=False, generator=torch.Generator().manual_seed(self.seed))
         return train_loader, val_loader
 
     def create_model(self, gene):
         return BaselineNN(input_size=28*28, hidden_size=128, output_size=10), EvolvedLoss(gene)
 
     def evaluate(self, model_and_loss, val_loader):
+        set_seed(self.seed)
         model, loss_function = model_and_loss
         model.eval()
         correct = 0
