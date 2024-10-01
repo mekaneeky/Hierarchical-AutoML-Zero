@@ -18,7 +18,7 @@ class BaseValidator(ABC):
     def __init__(self, config):
         self.config = config
         self.function_decoder = FunctionDecoder()
-        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        self.device = config.device
         #self.hf_repo = config.hf_repo
         self.chain_manager = config.chain_manager
         self.bittensor_network = config.bittensor_network

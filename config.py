@@ -8,10 +8,33 @@ class config:
     metrics_file = "metrics.csv"
     # Hugging Face Configuration
 
+    ## Safety parameters (avoid OOM/DOS)
+    # 
+    # Maximum gene size
+    max_gene_size = 1024*1024
+    
+    # Maximum number of scalar values in memory
+    max_num_scalars = 1000
+
+    # Maximum number of vector values in memory
+    max_num_vectors = 100
+
+    # Maximum number of tensor values in memory
+    max_num_tensors = 50
+
+    # Maximum total size of vectors (in bytes or elements, depending on implementation)
+    max_vector_size = 1000
+
+    # Maximum total size of tensors (in bytes or elements, depending on implementation)
+    max_tensor_size = 10000
+
+    # Maximum length for various gene components
+    max_gene_length = 500
+
     class Bittensor:
         netuid = 100
-        wallet_name = "test_wallet_1"
-        wallet_hotkey = "test_hot_1"
+        wallet_name = "test_wallet_90"
+        wallet_hotkey = "test_hot_90"
         path = "~/.bittensor/wallets/"
         network = "test"  # or "finney" for mainnet
         epoch_length = 100
@@ -36,7 +59,7 @@ class config:
         population_size = 100
         num_meta_levels = 1
         genome_length = 5
-        tournament_size = 7
+        tournament_size = 50
         generations = 1000
         generation_iters = 100
         num_scalars = 5
@@ -48,7 +71,7 @@ class config:
         input_addresses = [5, 6]
         output_addresses = [7]
         miner_type = "loss"
-        migration_server_url = "http://127.0.0.1:4999"
+        migration_server_url = None#"http://127.0.0.1:4999"
         migration_interval = 10
         pool_url = "http://127.0.0.1:5000"
         push_platform = "hf"
@@ -61,6 +84,7 @@ class config:
         top_k = 10  # Number of top miners to distribute scores to
         min_score = 0.0  # Minimum score for miners not in the top-k
 
+        
 
     
     # MNIST Configuration (if needed)
