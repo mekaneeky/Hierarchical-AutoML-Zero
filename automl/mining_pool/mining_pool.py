@@ -1,6 +1,6 @@
 from flask import Flask, request, jsonify
-from miners import MinerFactory
-from auth import authenticate_request_with_bittensor
+from automl.miners import MinerFactory
+from automl.auth import authenticate_request_with_bittensor
 from automl.gene_io import import_gene_from_json, export_gene_to_json
 import torch
 import logging
@@ -76,12 +76,12 @@ def get_task():
     task = mining_pool.distribute_task()
     return jsonify(task)
 
-@app.route('/submit_result', methods=['POST'])
+@app.route('/push_gene', methods=['POST'])
 @authenticate_request_with_bittensor
 def submit_result():
     data = request.json
     miner_address = data['public_address']
-    result = import_gene_from_json(gene_data=data['result'])
+    result = import_gene_from_json(gene_data=data['gene'])
     mining_pool.collect_result(miner_address, result)
     return jsonify({"success": True})
 

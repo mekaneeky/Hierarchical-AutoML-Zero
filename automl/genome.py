@@ -231,9 +231,9 @@ class FunctionGenome:
     def mutate_float_log_scale(value): 
         """Mutate a float value using log-scale mutation.""" 
         if value > 0: 
-            return torch.exp(torch.log(torch.tensor(value)) + random.gauss(0.0, 1.0)) 
+            return torch.exp(torch.log(torch.tensor(value)) + random.gauss(0.0, 1.0)).item()
         else: 
-            return -torch.exp(torch.log(-torch.tensor(value)) + random.gauss(0.0, 1.0)) 
+            return -torch.exp(torch.log(-torch.tensor(value)) + random.gauss(0.0, 1.0)).item()
 
     def mutate_constant(self): 
         """Either flip the sign of a value or apply log-scale mutation.""" 

@@ -4,6 +4,24 @@ from automl.genome import FunctionGenome
 from automl.memory import CentralMemory
 from automl.function_decoder import FunctionDecoder
 
+def tensor_to_list(obj):
+    if isinstance(obj, torch.Tensor):
+        return obj.tolist()
+    elif isinstance(obj, dict):
+        return {k: tensor_to_list(v) for k, v in obj.items()}
+    elif isinstance(obj, list):
+        return [tensor_to_list(v) for v in obj]
+    else:
+        return obj
+
+def list_to_tensor(obj):
+    if isinstance(obj, list):
+        return torch.tensor(obj)
+    elif isinstance(obj, dict):
+        return {k: list_to_tensor(v) for k, v in obj.items()}
+    else:
+        return obj
+
 def export_gene_to_json(gene, filename = None):
     """
     Export a FunctionGenome object to a JSON file.
@@ -12,6 +30,7 @@ def export_gene_to_json(gene, filename = None):
     gene (FunctionGenome): The gene to export
     filename (str): The name of the file to save the JSON data
     """
+
     gene_data = {
         "length": gene.length,
         "meta_level": gene.meta_level,
@@ -29,9 +48,9 @@ def export_gene_to_json(gene, filename = None):
             "num_scalars": gene.memory.num_scalars,
             "num_vectors": gene.memory.num_vectors,
             "num_tensors": gene.memory.num_tensors,
-            "scalar_size": gene.memory.scalar_size,
-            "vector_size": gene.memory.vector_size,
-            "tensor_size": gene.memory.tensor_size
+            "scalar_size": tensor_to_list(gene.memory.scalar_size),
+            "vector_size": tensor_to_list(gene.memory.vector_size),
+            "tensor_size": tensor_to_list(gene.memory.tensor_size)
         }
     }
     

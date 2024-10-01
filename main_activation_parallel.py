@@ -120,9 +120,7 @@ def main(migration_server_url):
 
             except Exception as e:
                offspring.fitness = -9999
-               automl.fec_cache[fingerprint] = -9999
-
-     
+               automl.fec_cache[fingerprint] = -9999 
 
         # Log the best performance in this generation
         best_genome = deepcopy(max(population, key=lambda g: g.fitness))

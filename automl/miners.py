@@ -9,15 +9,16 @@ from torchvision import datasets, transforms
 from tqdm import tqdm
 import logging 
 import pandas as pd
+import time
 
 from automl.evolutionary_algorithm import AutoMLZero
 from automl.memory import CentralMemory
 from automl.function_decoder import FunctionDecoder
 from automl.models import BaselineNN, EvolvableNN
 from automl.gene_io import export_gene_to_json, import_gene_from_json
+from automl.destinations import PushMixin, PoolPushDestination, HuggingFacePushDestination
 
-
-class BaseMiner(ABC):
+class BaseMiner(ABC, PushMixin):
     def __init__(self, config):
         self.config = config
         self.central_memory = CentralMemory(
@@ -41,6 +42,8 @@ class BaseMiner(ABC):
         self.setup_logging()
         self.metrics_file = config.metrics_file
         self.metrics_data = []
+        
+        self.push_destinations = []
 
     def log_metrics(self, generation, accuracy):
         self.metrics_data.append({'generation': generation, 'accuracy': accuracy})
@@ -50,21 +53,41 @@ class BaseMiner(ABC):
             df = pd.DataFrame(self.metrics_data)
             df.to_csv(self.metrics_file, index=False)
 
+    def get_best_migrant(self):
+        response = requests.get(f"{self.migration_server_url}/get_best_fitness")
+        best_fitness = response.json()["best_fitness"]
+        if type(best_fitness) == float:
+            return best_fitness
+        else:
+            return -1
 
-    def migrate_genes(self, best_gene):
-        if not self.migration_server_url:
-            return []
+    def emigrate_genes(self, best_gene):
+        
 
         # Submit best gene
         gene_data = export_gene_to_json(gene=best_gene)
-        requests.post(f"{self.migration_server_url}/submit_gene", json=gene_data)
+        response = requests.post(f"{self.migration_server_url}/submit_gene", json=gene_data)
+
+        if response.status_code == 200:
+            return True
+        else:
+            return False
         
+    def immigrate_genes(self):
         # Get mixed genes from server
         response = requests.get(f"{self.migration_server_url}/get_mixed_genes")
         received_genes_data = response.json()
+
+        if not self.migration_server_url:
+            return []
         
         return [import_gene_from_json(gene_data=gene_data, function_decoder=self.function_decoder) 
                 for gene_data in received_genes_data]
+
+    #One migration cycle
+    def migrate_genes(self,best_gene):
+        self.emigrate_genes(best_gene)
+        return self.immigrate_genes()
     
     def push_to_huggingface(self, file_path, commit_message):
         if not self.config.gene_repo:
@@ -149,9 +172,14 @@ class BaseMiner(ABC):
             if best_genome.fitness > best_genome_all_time.fitness:
                 best_genome_all_time = deepcopy(best_genome)
                 logging.info(f"New best gene found. Pushing to {self.config.gene_repo}")
-                export_gene_to_json(best_genome_all_time, "best_gene.json")
-                self.push_to_huggingface("best_gene.json", f"Best gene (Gen {generation}, Acc {accuracy:.4f})")
-
+                if self.migration_server_url:
+                    best_migration_fitness = self.get_best_migrant()
+                    if best_migration_fitness < best_genome_all_time.fitness:
+                        self.push_to_remote(best_genome_all_time, f"Best gene (Gen {generation}, Acc {best_genome_all_time.fitness:.4f})")
+                        self.emigrate_genes(best_genome_all_time)
+                else:
+                    self.push_to_remote(best_genome_all_time, f"Best gene (Gen {generation}, Acc {best_genome_all_time.fitness:.4f})")
+                                
             logging.info(f"Generation {generation}: Best accuracy = {best_genome.fitness:.4f}")
             logging.info(f"Improvement over baseline: {best_genome.fitness - self.baseline_accuracy:.4f}")
             logging.info(f"Total unique algorithms seen: {len(self.automl.fec_cache.keys())}")
@@ -187,32 +215,39 @@ class BaseMiner(ABC):
             datefmt='%Y-%m-%d %H:%M:%S'
         )
 
-class BaseMiningPoolMiner(BaseMiner):
-    def __init__(self, config, pool_url):
+class BaseHuggingFaceMiner(BaseMiner):
+    def __init__(self, config):
         super().__init__(config)
-        self.pool_url = pool_url
+        self.push_destinations.append(HuggingFacePushDestination(config.gene_repo))
 
-    def mine_in_pool(self):
-        # Register with the pool
-        self.register_with_pool()
+class BaseMiningPoolMiner(BaseMiner):
+    def __init__(self, config):
+        super().__init__(config)
+        self.push_destinations.append(PoolPushDestination(config.Miner.pool_url, config.bittensor_network.wallet))
+        self.pool_url = config.Miner.pool_url
 
-        # Get task from the pool
-        task = self.get_task_from_pool()
+    # def mine_in_pool(self):
+    #     # Register with the pool
+    #     self.register_with_pool()
 
-        # Update config with pool task if necessary
-        self.update_config_with_task(task)
+    #     # Get task from the pool
+    #     task = self.get_task_from_pool()
 
-        # Perform mining
-        best_genome = self.mine()
+    #     # Update config with pool task if necessary
+    #     self.update_config_with_task(task)
 
-        # Submit result to the pool
-        self.submit_result_to_pool(best_genome)
+    #     # Perform mining
+    #     best_genome = self.mine()
 
-        # Get rewards
-        rewards = self.get_rewards_from_pool()
+    #     # Submit result to the pool
+    #     self.submit_result_to_pool(best_genome)
 
-        return rewards
+    #     # Get rewards
+    #     rewards = self.get_rewards_from_pool()
 
+    #     return rewards
+
+    #TODO add a timestamp or sth to requests to prevent spoofing signatures
     def register_with_pool(self):
         data = self._prepare_request_data("register")
         response = requests.post(f"{self.pool_url}/register", json=data)
@@ -232,20 +267,13 @@ class BaseMiningPoolMiner(BaseMiner):
     def get_rewards_from_pool(self):
         data = self._prepare_request_data("get_rewards")
         response = requests.get(f"{self.pool_url}/get_rewards", json=data)
-        return response.json()
-
-    def _prepare_request_data(self, message):
-        return {
-            "public_address": self.config.wallet.hotkey.ss58_address,
-            "signature": self.config.wallet.hotkey.sign(message).hex(),
-            "message": message
-        }
+        return response.json() 
 
     def update_config_with_task(self, task):
         # Update miner config with task-specific parameters if needed
         pass
 
-class ActivationMiner(BaseMiningPoolMiner):
+class ActivationMiner(BaseMiner):
     def load_data(self):
         transform = transforms.Compose([transforms.ToTensor(), transforms.Normalize((0.1307,), (0.3081,))])
         train_data = datasets.MNIST('../data', train=True, download=True, transform=transform)
@@ -317,7 +345,7 @@ class EvolvedLoss(torch.nn.Module):
         loss = memory[0].mean() if memory[0].numel() > 1 else memory[0]
         return loss
 
-class LossMiner(BaseMiningPoolMiner):
+class LossMiner(BaseMiner):
     def load_data(self):
         transform = transforms.Compose([transforms.ToTensor(), transforms.Normalize((0.1307,), (0.3081,))])
         train_data = datasets.MNIST('../data', train=True, download=True, transform=transform)
@@ -360,7 +388,7 @@ class LossMiner(BaseMiningPoolMiner):
     def create_baseline_model(self):
         return BaselineNN(input_size=28*28, hidden_size=128, output_size=10), torch.nn.CrossEntropyLoss()
     
-class SimpleMiner(BaseMiningPoolMiner):
+class SimpleMiner(BaseMiner):
     def load_data(self):
         x_data = torch.linspace(0, 10, 100)
         y_data = self.target_function(x_data)
@@ -386,15 +414,40 @@ class SimpleMiner(BaseMiningPoolMiner):
     def target_function(x):
         return (x / 2) + 2
     
+class ActivationMinerPool(ActivationMiner, BaseMiningPoolMiner):
+    pass
+
+class ActivationMinerHF(ActivationMiner, BaseHuggingFaceMiner):
+    pass
+
+class LossMinerPool(LossMiner, BaseMiningPoolMiner):
+    pass
+
+class LossMinerHF(LossMiner, BaseHuggingFaceMiner):
+    pass
+
+class SimpleMinerPool(SimpleMiner, BaseMiningPoolMiner):
+    pass
+
+class SimpleMinerHF(SimpleMiner, BaseHuggingFaceMiner):
+    pass
+
+
 class MinerFactory:
     @staticmethod
     def get_miner(config):
         miner_type = config.Miner.miner_type
-        if miner_type == "activation":
-            return ActivationMiner(config)
-        elif miner_type == "loss":
-            return LossMiner(config)
-        elif miner_type == "simple":
-            return SimpleMiner(config)
-        else:
-            raise ValueError(f"Unknown miner type: {miner_type}")
+        platform = config.Miner.push_platform
+
+        if platform == 'pool':
+            if miner_type == "activation":
+                return ActivationMinerPool(config)
+            elif miner_type == "loss":
+                return LossMinerPool(config)
+        elif platform == 'hf':
+            if miner_type == "activation":
+                return ActivationMinerHF(config)
+            elif miner_type == "loss":
+                return LossMinerHF(config)
+        
+        raise ValueError(f"Unknown miner type: {miner_type} or platform: {platform}")

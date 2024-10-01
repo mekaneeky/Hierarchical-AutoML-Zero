@@ -3,7 +3,7 @@ import bittensor as bt
 class config:
     # Global Configuration
     device = "cpu"  # Use "cuda" for GPU, "cpu" for CPU
-    hf_token = "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"
+    hf_token = "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"
     gene_repo = "mekaneeky/testing-repo-4"
     metrics_file = "metrics.csv"
     # Hugging Face Configuration
@@ -48,9 +48,10 @@ class config:
         input_addresses = [5, 6]
         output_addresses = [7]
         miner_type = "loss"
-        migration_server_url = None
-        migration_interval = 0
+        migration_server_url = "http://127.0.0.1:4999"
+        migration_interval = 10
         pool_url = "http://127.0.0.1:5000"
+        push_platform = "hf"
 
 
     # Validator Configuration

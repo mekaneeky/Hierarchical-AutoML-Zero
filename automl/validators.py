@@ -62,7 +62,6 @@ class BaseValidator(ABC):
     def validate_and_score(self):
         logging.info("Receiving genes from chain")
         self.bittensor_network.sync(lite=True)
-
         
         if not self.check_registration():
             logging.info("This validator is no longer registered on the chain.")
@@ -96,7 +95,7 @@ class BaseValidator(ABC):
                 logging.info(f"No gene received from: {hotkey_address}")
                 self.scores[hotkey_address] = 0
 
-        self.log_metrics(len(self.metrics_data), self.scores)
+        #self.log_metrics(len(self.metrics_data), self.scores)
         
         top_k = self.config.Validator.top_k
         min_score = self.config.Validator.min_score
@@ -119,6 +118,9 @@ class BaseValidator(ABC):
                 # Assign min_score or 0 to miners not in the top-k
                 self.normalized_scores[hotkey_address] = min_score
         logging.info(f"Normalized scores: {self.normalized_scores}")
+        
+        self.log_metrics(len(self.metrics_data), self.normalized_scores)
+
         if self.bittensor_network.should_set_weights():
             self.bittensor_network.set_weights(self.normalized_scores)
             logging.info("Weights Setting attempted !")

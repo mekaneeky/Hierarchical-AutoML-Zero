@@ -1,8 +1,14 @@
 from automl.miners import MinerFactory
 from automl.unpacker import HierarchicalGenomeUnpacker
+from neurons.btt_connector import BittensorNetwork
 from config import config
 
 def main(config):
+    bt_config = config.get_bittensor_config()
+    BittensorNetwork.initialize(bt_config)
+
+    config.bittensor_network = BittensorNetwork
+
     miner = MinerFactory.get_miner(config)
     best_genome = miner.mine()
 
