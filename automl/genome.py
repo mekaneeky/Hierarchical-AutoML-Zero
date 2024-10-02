@@ -274,7 +274,10 @@ class FunctionGenome:
 
     def mutate_all(self):
         self.gene = [random.randint(0, self.max_op_pop) for _ in range(self.length)]
-
+        self.input_gene = []
+        self.input_gene_2 = []
+        self.output_gene = []
+        
         for codon in self.gene:
             func, output_type, input_1_type, input_2_type = self.function_decoder.decoding_map[codon]
             self.input_gene.append(self.get_random_memory_address(input_1_type))

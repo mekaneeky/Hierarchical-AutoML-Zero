@@ -20,7 +20,7 @@ class HierarchicalGenomeUnpacker:
             16: "memory[{out}] = {constant}  # SET CONSTANT SCALAR",
             17: "memory[{out}] = torch.empty(1).normal_({in1}, {in2})  # GAUSSIAN SCALAR",
             18: "memory[{out}] = torch.empty(memory[{in1}].shape).normal_({in1}, {in2})  # GAUSSIAN MATRIX",
-            19: "memory[{out}] = torch.empty(memory[{in1}].shape).uniform_(memory[{in2}], memory[{in3}])  # UNIFORM SCALAR",
+            19: "memory[{out}] = torch.empty(memory[{in1}].shape).uniform_(memory[{in2}], memory[CONSTANT])  # UNIFORM SCALAR",
             20: "memory[{out}] = torch.log(torch.abs(memory[{in1}]) + 1e-10)  # LOG",
             21: "memory[{out}] = torch.pow(memory[{in1}], memory[{in2}])  # POWER",
             22: "memory[{out}] = torch.sqrt(torch.abs(memory[{in1}]))  # SQRT",
@@ -50,7 +50,7 @@ class HierarchicalGenomeUnpacker:
             46: "memory[{out}] = self.stable_softmax(memory[{in1}])  # STABLE SOFTMAX VECTOR",
             47: "memory[{out}] = torch.mean(memory[{in1}])  # MEAN VECTOR",
             48: "memory[{out}] = torch.std(memory[{in1}])  # STD VECTOR",
-            49: "memory[{out}] = torch.empty(memory[{in1}].shape).uniform_(memory[{in2}], memory[{in3}])  # UNIFORM VECTOR",
+            49: "memory[{out}] = torch.empty(memory[{in1}].shape).uniform_(memory[{in2}], memory[CONSTANT])  # UNIFORM VECTOR",
             50: "memory[{out}] = torch.log(torch.abs(memory[{in1}]) + 1e-10)  # LOG VECTOR",
             51: "memory[{out}] = torch.pow(memory[{in1}], memory[{in2}])  # POWER VECTOR",
             52: "memory[{out}] = torch.sqrt(torch.abs(memory[{in1}]))  # SQRT VECTOR",
@@ -82,7 +82,7 @@ class HierarchicalGenomeUnpacker:
             78: "memory[{out}] = self.stable_softmax(memory[{in1}])  # STABLE SOFTMAX MATRIX",
             79: "memory[{out}] = torch.mean(memory[{in1}])  # MEAN MATRIX",
             80: "memory[{out}] = torch.std(memory[{in1}], dim=0)  # STD MATRIX",
-            81: "memory[{out}] = torch.empty(memory[{in1}].shape).uniform_(memory[{in2}], memory[{in3}])  # UNIFORM MATRIX",
+            81: "memory[{out}] = torch.empty(memory[{in1}].shape).uniform_(memory[{in2}], memory[CONSTANT])  # UNIFORM MATRIX",
             82: "memory[{out}] = torch.log(torch.abs(memory[{in1}]) + 1e-10)  # LOG MATRIX",
             83: "memory[{out}] = torch.pow(memory[{in1}], memory[{in2}])  # POWER MATRIX",
             84: "memory[{out}] = torch.sqrt(torch.abs(memory[{in1}]))  # SQRT MATRIX",
@@ -103,7 +103,7 @@ class HierarchicalGenomeUnpacker:
             99: "memory[{out}] = torch.outer(memory[{in1}], memory[{in2}])  # OUTER PRODUCT",
             100: "memory[{out}] = torch.matmul(memory[{in1}], memory[{in2}])  # MATMUL",
             101: "memory[{out}] = memory[{in1}].t()  # TRANSPOSE",
-            102: "memory[{out}] = torch.empty(memory[{in1}].shape).normal_(memory[{in2}], memory[{in3}])  # GAUSSIAN VECTOR",
+            102: "memory[{out}] = torch.empty(memory[{in1}].shape).normal_(memory[CONSTANT], memory[CONSTANT])  # GAUSSIAN VECTOR",
         }
         self.cache = {}
 

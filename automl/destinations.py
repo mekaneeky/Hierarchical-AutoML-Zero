@@ -48,7 +48,7 @@ class HuggingFacePushDestination(PushDestination):
             api = HfApi()
             api.upload_file(
                 path_or_fileobj=temp_file_path,
-                path_in_repo=f"genes/gene_{time.time()}.json",
+                path_in_repo=f"best_gene.json",
                 repo_id=self.repo_name,
                 commit_message=commit_message
             )

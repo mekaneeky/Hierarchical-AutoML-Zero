@@ -10,7 +10,7 @@ from abc import ABC, abstractmethod
 import time
 from huggingface_hub import HfApi, Repository
 
-from automl.models import EvolvableNN, BaselineNN
+from automl.models import EvolvableNN, BaselineNN, EvolvedLoss
 from automl.gene_io import import_gene_from_json
 from automl.function_decoder import FunctionDecoder
 from automl.utils import set_seed
@@ -59,7 +59,6 @@ class BaseValidator(ABC):
     def measure_baseline(self):
         _, val_loader = self.load_data()
         baseline_model = self.create_baseline_model()
-        baseline_model.to(self.device)
         self.base_accuracy = self.evaluate(baseline_model, val_loader)
         logging.info(f"Baseline model accuracy: {self.base_accuracy:.4f}")
 
@@ -91,6 +90,7 @@ class BaseValidator(ABC):
                     model.to(self.device)
 
                 accuracy = self.evaluate(model, val_loader)
+                breakpoint()
                 accuracy_score = max(0, accuracy - self.base_accuracy)
                 total_scores += accuracy_score
                 
@@ -147,7 +147,8 @@ class BaseValidator(ABC):
         try:
             file_info = api.list_repo_files(repo_id=repo_name)
             if "best_gene.json" in file_info:
-                file_details = api.list_repo_tree(repo_id=repo_name, path="best_gene.json")
+                
+                file_details = [thing for thing in api.list_repo_tree(repo_id=repo_name) if thing.path=="best_gene.json"]
                 if file_details:
                     file_size = file_details[0].size  # Size in bytes
                     max_size = self.config.max_gene_size  # 1 MB limit (adjust as needed) 1024*1024
@@ -199,7 +200,7 @@ class ActivationValidator(BaseValidator):
             hidden_size=128, 
             output_size=10, 
             evolved_activation=gene.function()
-        )
+        ).to(self.device)
 
     def evaluate(self, model, val_loader):
         set_seed(self.seed)
@@ -215,33 +216,6 @@ class ActivationValidator(BaseValidator):
                 correct += predicted.eq(targets).sum().item()
         return correct / total
 
-class EvolvedLoss(torch.nn.Module):
-    def __init__(self, gene):
-        super().__init__()
-        self.gene = gene
-
-    def forward(self, outputs, targets):
-        outputs = outputs.detach().float().requires_grad_()
-        targets = targets.detach().float().requires_grad_()
-        
-        memory = self.gene.memory
-        memory.reset()
-        
-        memory[0] = outputs
-        memory[1] = targets
-
-        for i, op in enumerate(self.gene.gene):
-            func = self.gene.function_decoder.decoding_map[op][0]
-            input1 = memory[self.gene.input_gene[i]]
-            input2 = memory[self.gene.input_gene_2[i]]
-            constant = torch.tensor(self.gene.constants_gene[i], requires_grad=True)
-            constant_2 = torch.tensor(self.gene.constants_gene_2[i], requires_grad=True)
-            
-            output = func(input1, input2, constant, constant_2, self.gene.row_fixed, self.gene.column_fixed)
-            memory[self.gene.output_gene[i]] = output
-
-        loss = memory[0].mean() if memory[0].numel() > 1 else memory[0]
-        return loss
 
 class LossValidator(BaseValidator):
     def load_data(self):
@@ -253,17 +227,41 @@ class LossValidator(BaseValidator):
         return train_loader, val_loader
 
     def create_model(self, gene):
-        return BaselineNN(input_size=28*28, hidden_size=128, output_size=10), EvolvedLoss(gene)
+        return BaselineNN(input_size=28*28, hidden_size=128, output_size=10).to(self.device), EvolvedLoss(gene, self.device)
 
-    def evaluate(self, model_and_loss, val_loader):
+    def train(self, model_and_loss, train_loader):
         set_seed(self.seed)
         model, loss_function = model_and_loss
+        optimizer = torch.optim.Adam(model.parameters())
+        model.train()
+        for idx, (inputs, targets) in enumerate(train_loader):
+            
+            inputs = inputs.to(self.device)
+            targets = targets.to(self.device)
+
+            if idx == 1:
+                break
+
+            optimizer.zero_grad()
+            outputs = model(inputs)
+            loss = loss_function(outputs, targets)
+            loss.backward()
+            optimizer.step()
+
+    def evaluate(self, model_and_loss, val_loader=None):
+        set_seed(self.seed)
+        train_dataloader, val_dataloader = self.load_data()
+        model, loss_function = model_and_loss
+        model.train()
+        self.train((model, loss_function), train_loader=train_dataloader)
         model.eval()
         correct = 0
         total = 0
         with torch.no_grad():
-            for inputs, targets in val_loader:
+            for idx, (inputs, targets) in enumerate(val_dataloader):
                 inputs, targets = inputs.to(self.device), targets.to(self.device)
+                if idx > 10:
+                    break
                 outputs = model(inputs)
                 _, predicted = outputs.max(1)
                 total += targets.size(0)
@@ -271,12 +269,11 @@ class LossValidator(BaseValidator):
         return correct / total
 
     def create_baseline_model(self):
-        return BaselineNN(input_size=28*28, hidden_size=128, output_size=10), torch.nn.CrossEntropyLoss()
+        return BaselineNN(input_size=28*28, hidden_size=128, output_size=10).to(self.device), torch.nn.CrossEntropyLoss()
     
     def measure_baseline(self):
         _, val_loader = self.load_data()
         baseline_model, loss = self.create_baseline_model()
-        baseline_model.to(self.device)
         self.base_accuracy = self.evaluate((baseline_model, loss), val_loader)
         logging.info(f"Baseline model accuracy: {self.base_accuracy:.4f}")
 

@@ -89,8 +89,8 @@ def validate_gene_size(gene_data, config):
         ('output_gene', lambda: len(gene_data['output_gene']), config.max_gene_length),
         ('constants_gene', lambda: len(gene_data['constants_gene']), config.max_gene_length),
         ('constants_gene_2', lambda: len(gene_data['constants_gene_2']), config.max_gene_length),
-        ('row_fixed', lambda: len(gene_data['row_fixed']), config.max_gene_length),
-        ('column_fixed', lambda: len(gene_data['column_fixed']), config.max_gene_length),
+        #('row_fixed', lambda: len(gene_data['row_fixed']), config.max_gene_length),
+        #('column_fixed', lambda: len(gene_data['column_fixed']), config.max_gene_length),
     ]
     
     for name, size_func, limit in checks:

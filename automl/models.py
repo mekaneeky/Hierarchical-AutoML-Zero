@@ -1,4 +1,5 @@
 import torch.nn as nn
+import torch 
 
 class BaselineNN(nn.Module):
     def __init__(self, input_size, hidden_size, output_size):
@@ -27,3 +28,32 @@ class EvolvableNN(nn.Module):
         x = self.evolved_activation(x)
         x = self.fc2(x)
         return x
+    
+class EvolvedLoss(torch.nn.Module):
+    def __init__(self, genome, device = "cpu"):
+        super().__init__()
+        self.genome = genome
+        self.device = device
+
+    def forward(self, outputs, targets):
+        outputs = outputs.detach().float().requires_grad_()#.to(self.device)
+        targets = targets.detach().float().requires_grad_()#.to(self.device)
+        
+        memory = self.genome.memory
+        memory.reset()
+        
+        memory[0] = outputs
+        memory[1] = targets
+
+        for i, op in enumerate(self.genome.gene):
+            func = self.genome.function_decoder.decoding_map[op][0]
+            input1 = memory[self.genome.input_gene[i]]#.to(self.device)
+            input2 = memory[self.genome.input_gene_2[i]]#.to(self.device)
+            constant = torch.tensor(self.genome.constants_gene[i], requires_grad=True)#.to(self.device)
+            constant_2 = torch.tensor(self.genome.constants_gene_2[i], requires_grad=True)#.to(self.device)
+            
+            output = func(input1, input2, constant, constant_2, self.genome.row_fixed, self.genome.column_fixed)
+            memory[self.genome.output_gene[i]] = output
+
+        loss = memory[0].mean() if memory[0].numel() > 1 else memory[0]
+        return loss
