@@ -13,6 +13,7 @@ import pickle
 import os
 import logging
 import traceback
+from functools import partial
 
 # Set up logging
 logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -38,6 +39,7 @@ class Net(nn.Module):
 # def safe_div(x, y):
 #     return torch.where(y != 0, x / y, torch.zeros_like(x))
 device = torch.device("mps") 
+device_str = str(device)
 
 def safe_div(x, y):
     epsilon = 1e-8
@@ -65,18 +67,23 @@ def safe_div(x, y):
     return x / (y + epsilon)
 
 def safe_sigmoid(x):
-    x = torch.tensor(x, device=device) if not torch.is_tensor(x) else x
+    x = torch.tensor(x, device=device,dtype=torch.float32) if not torch.is_tensor(x) else x
     return torch.sigmoid(x)
 
 def safe_relu(x):
-    x = torch.tensor(x, device=device) if not torch.is_tensor(x) else x
+    x = torch.tensor(x, device=device,dtype=torch.float32) if not torch.is_tensor(x) else x
     return torch.relu(x)
 
 def safe_tanh(x):
-    x = torch.tensor(x, device=device) if not torch.is_tensor(x) else x
+    x = torch.tensor(x, device=device,dtype=torch.float32) if not torch.is_tensor(x) else x
     return torch.tanh(x)
 
+def rand_const():
+    return torch.tensor(random.uniform(-10, 10))
 
+def random_uniform_tensor(low, high, device='cpu'):
+    return torch.tensor(random.uniform(low, high), device=device)
+generate_random_tensor_partial = partial(random_uniform_tensor, -1, 1, device=device_str)
 
 
 # # Simplified primitive set
@@ -104,7 +111,7 @@ pset.addPrimitive(safe_div, 2)
 pset.addPrimitive(safe_sigmoid, 1)
 pset.addPrimitive(safe_relu, 1)
 pset.addPrimitive(safe_tanh, 1)
-pset.addEphemeralConstant(name='const', ephemeral=lambda: torch.tensor(random.uniform(-1, 1), device=device))
+# pset.addEphemeralConstant(name='const', ephemeral=generate_random_tensor_partial)
 pset.renameArguments(ARG0='y_pred')
 pset.renameArguments(ARG1='y_true')
 pset.addTerminal(torch.tensor(1.0, device=device), name='one')
