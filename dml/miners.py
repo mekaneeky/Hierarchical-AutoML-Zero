@@ -465,7 +465,7 @@ class LossMiner(BaseMiner):
         return correct / total
 
     def create_baseline_model(self):
-        return BaselineNN(input_size=28*28, hidden_size=128, output_size=10), torch.nn.MSELoss()
+        return BaselineNN(input_size=28*28, hidden_size=128, output_size=10).to(self.device), torch.nn.MSELoss()
 
 
 class SimpleMiner(BaseMiner):
