@@ -93,6 +93,20 @@ def run_main_script():
         return False
     return True
 
+def install_packages():
+    """Runs pip install -e . to install the package in editable mode."""
+    try:
+        # Run the pip install -e . command
+        result = subprocess.run(['pip', 'install', '-e', '.'], check=True, capture_output=True, text=True)
+        
+        # Print the output from the command
+        logging.debug(result.stdout)
+        logging.info("Package installed in editable mode successfully.")
+    
+    except subprocess.CalledProcessError as e:
+        # Handle errors in case the command fails
+        logging.error(f"Error occurred during installation: {e.stderr}")
+
 def main():
     try:
         local_version = get_local_version()
@@ -138,6 +152,7 @@ def main():
             
             logging.info("Update completed successfully.")
             update_performed = True
+            install_packages()
         else:
             logging.info("No update required.")
 
