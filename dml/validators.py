@@ -10,11 +10,14 @@ from abc import ABC, abstractmethod
 import time
 from huggingface_hub import HfApi, Repository
 
+from typing import Any, Dict, Optional
+
 from deap import algorithms, base, creator, tools, gp
 
 from dml.models import BaselineNN, EvolvableNN, EvolvedLoss
 from dml.gene_io import load_individual_from_json
 from dml.ops import create_pset
+from dml.record import GeneRecordManager
 from dml.utils import set_seed
 
 class BaseValidator(ABC):
@@ -24,11 +27,16 @@ class BaseValidator(ABC):
         self.chain_manager = config.chain_manager
         self.bittensor_network = config.bittensor_network
         self.interval = config.Validator.validation_interval
+        self.gene_record_manager = GeneRecordManager()
         self.scores = {}
         self.normalized_scores = {}
         self.metrics_file = config.metrics_file
         self.metrics_data = []
         self.seed = self.config.seed
+
+        self.penalty_factor = config.Validator.time_penalty_factor
+        self.penalty_max_time = config.Validator.time_penalty_max_time
+        self.performance_similarity_threshold = config.Validator.performance_similarity_threshold
 
         set_seed(self.seed)
         
@@ -58,6 +66,19 @@ class BaseValidator(ABC):
         if len(self.metrics_data) % 5 == 0:
             df = pd.DataFrame(self.metrics_data)
             df.to_csv(self.metrics_file, index=False)
+
+    def calculate_time_penalty(self, new_timestamp: float, old_timestamp: float) -> float:
+        time_diff = new_timestamp - old_timestamp
+        if time_diff <= 0:
+            return 1.0
+        penalty = 1.0 - (time_diff / self.penalty_max_time) * self.penalty_factor
+        return max(penalty, 1.0 - self.penalty_factor)
+    
+    def find_best_gene(self) -> Optional[Dict[str, Any]]:
+        all_records = self.gene_record_manager.get_all_records()
+        if not all_records:
+            return None
+        return max(all_records.values(), key=lambda x: x['performance'])
 
     @abstractmethod
     def load_data(self):
@@ -96,25 +117,50 @@ class BaseValidator(ABC):
 
         _, val_loader = self.load_data()
         total_scores = 0
+        best_gene = self.find_best_gene()
+        current_time = time.time()
 
         for uid, hotkey_address in enumerate(self.bittensor_network.metagraph.hotkeys):
 
             hf_repo = self.chain_manager.retrieve_hf_repo(hotkey_address)
-            gene = self.receive_gene_from_hf(hf_repo)
+            remote_gene_hash = self.get_remote_gene_hash(hf_repo)
+            if self.gene_record_manager.should_download(hotkey_address, remote_gene_hash):
+                gene = self.receive_gene_from_hf(hf_repo)
 
-            if gene is not None:
-                logging.info(f"Receiving gene from: {hotkey_address} ---> {hf_repo}")
-                
-                accuracy = self.evaluate_individual(gene[0], val_loader)[0]
-                accuracy_score = max(0, accuracy - self.base_accuracy)
-                total_scores += accuracy_score
-                
-                self.scores[hotkey_address] = accuracy_score
-                logging.info(f"Accuracy: {accuracy:.4f}")
-                logging.info(f"Accuracy Score: {accuracy_score:.4f}")
+                if gene is not None:
+                    logging.info(f"Receiving gene from: {hotkey_address} ---> {hf_repo}")
+                    
+                    accuracy = self.evaluate_individual(gene[0], val_loader)[0]
+                    accuracy_score = accuracy#max(0, accuracy - self.base_accuracy)
+
+                    if best_gene is None or accuracy_score > best_gene['performance']:
+                        final_score = accuracy_score
+                        logging.info("No penalty applied.")
+                    else:
+                        time_penalty = self.calculate_time_penalty(current_time, best_gene['timestamp'])
+                        final_score = accuracy_score * time_penalty
+                        logging.info(f"Penalty applied. Original score: {accuracy_score:.4f}, Final score: {final_score:.4f}")
+
+                    self.gene_record_manager.add_record(hotkey_address, remote_gene_hash, current_time, accuracy_score)
+
+                    self.scores[hotkey_address] = final_score
+                    logging.info(f"Accuracy: {accuracy:.4f}")
+                    logging.info(f"Accuracy Score: {accuracy_score:.4f}")
+                    
+                else:
+                    logging.info(f"No gene received from: {hotkey_address}")
+                    self.scores[hotkey_address] = 0
+
             else:
-                logging.info(f"No gene received from: {hotkey_address}")
-                self.scores[hotkey_address] = 0
+                existing_record = self.gene_record_manager.get_record(hotkey_address)
+                if existing_record:
+                    time_penalty = self.calculate_time_penalty(existing_record['timestamp'], best_gene['timestamp'])
+                    self.scores[hotkey_address] = existing_record['performance'] * time_penalty
+                    logging.info(f"No new gene from: {hotkey_address}. Using existing score: {existing_record['performance']:.4f}")
+                else:
+                    self.scores[hotkey_address] = 0
+                    logging.info(f"No record found for: {hotkey_address}")
+
 
         top_k = self.config.Validator.top_k
         min_score = self.config.Validator.min_score
@@ -172,6 +218,18 @@ class BaseValidator(ABC):
         except Exception as e:
             logging.info(f"Error retrieving gene from Hugging Face: {str(e)}")
         return None
+    
+    def get_remote_gene_hash(self, repo_name: str) -> str:
+        api = HfApi()
+        try:
+            file_info = api.list_repo_files(repo_id=repo_name)
+            if "best_gene.json" in file_info:
+                file_details = [thing for thing in api.list_repo_tree(repo_id=repo_name) if thing.path=="best_gene.json"]
+                if file_details:
+                    return file_details[0].blob_id  # This is effectively a hash of the file content
+        except Exception as e:
+            logging.error(f"Error retrieving gene hash from Hugging Face: {str(e)}")
+        return ""  # Return empty string if we couldn't get the hash
 
     def start_periodic_validation(self):
         while True:
