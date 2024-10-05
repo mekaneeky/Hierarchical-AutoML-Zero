@@ -2,7 +2,8 @@ import random
 import torch
 from deap import gp
 import torch 
-device = torch.device("cpu")
+from config import config
+device = torch.device(config.device)
 
 def safe_div(x, y):
     epsilon = 1e-8
