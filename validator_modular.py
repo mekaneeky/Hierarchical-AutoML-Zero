@@ -2,9 +2,9 @@ import argparse
 import logging
 
 from dml.validators import ValidatorFactory
-from neurons.btt_connector import BittensorNetwork
-from neurons.chain_manager import ChainMultiAddressStore
-from neurons.hf_manager import HFManager
+from chain.btt_connector import BittensorNetwork
+from chain.chain_manager import ChainMultiAddressStore
+from chain.hf_manager import HFManager
 from config import config 
 
 

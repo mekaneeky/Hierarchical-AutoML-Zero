@@ -1,5 +1,5 @@
 from dml.miners import MinerFactory
-from neurons.btt_connector import BittensorNetwork
+from chain.btt_connector import BittensorNetwork
 from config import config
 def main(config):
     bt_config = config.get_bittensor_config()
