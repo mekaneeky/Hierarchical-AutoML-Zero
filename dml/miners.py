@@ -15,7 +15,7 @@ import math
 
 from deap import algorithms, base, creator, tools, gp
 
-from dml.models import BaselineNN, EvolvableNN, EvolvedLoss, seed_with_mse
+from dml.models import BaselineNN, EvolvableNN
 from dml.ops import create_pset
 from dml.gene_io import save_individual_to_json, load_individual_from_json
 from dml.destinations import PushMixin, PoolPushDestination, HuggingFacePushDestination
