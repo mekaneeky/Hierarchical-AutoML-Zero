@@ -1,6 +1,5 @@
 import torch.nn as nn
 import torch 
-from automl.genome import FunctionGenome
 
 class BaselineNN(nn.Module):
     def __init__(self, input_size, hidden_size, output_size):
@@ -59,32 +58,3 @@ class EvolvedLoss(torch.nn.Module):
         loss = memory[self.genome.output_addresses[0]]
         return loss
     
-def seed_with_mse(genome_length, central_memory, function_decoder, input_addresses, output_addresses):
-    # Create a new FunctionGenome instance
-    assert len(input_addresses) == 2
-    assert len(output_addresses) == 1
-
-    genome = FunctionGenome(length=genome_length, central_memory=central_memory, function_decoder=function_decoder,
-                            input_addresses=input_addresses, output_addresses=output_addresses)
-    
-    # MSE components:
-    # 1. Subtract predicted from actual
-    # 2. Square the difference
-    # 3. Calculate mean
-    
-    # Assuming we have these operations in our function_decoder:
-    sub_op = next(op for op, (func, _, _, _) in function_decoder.decoding_map.items() if func.__name__ == 'sub_scalar')
-    multiply_op = next(op for op, (func, _, _, _) in function_decoder.decoding_map.items() if func.__name__ == 'multiply_scalar')
-    mean_op = next(op for op, (func, _, _, _) in function_decoder.decoding_map.items() if func.__name__ == 'mean_vector')
-    
-    # Set the gene sequence
-    #genome.gene = [sub_op, multiply_op, mean_op] + [0] * (genome_length - 3)  # Pad with no-op
-    genome.gene = [64, 65] + [0] * (genome_length - 3) + [47]
-
-    # Set input and output addresses
-    # Assuming first two addresses are for actual and predicted values
-    genome.input_gene = [input_addresses[0], output_addresses[0]] + [0] * (genome_length - 3) + [output_addresses[0]]
-    genome.input_gene_2 = [input_addresses[1], output_addresses[0], 0] + [0] * (genome_length - 3)
-    genome.output_gene = [output_addresses[0], output_addresses[0]] + [0] * (genome_length - 3) +  [output_addresses[0]]
-    
-    return genome
