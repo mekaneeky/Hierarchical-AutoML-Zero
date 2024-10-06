@@ -49,6 +49,7 @@ setup(
         "torchvision>=0.9.0",
 
         "numpy>=1.19.0",
+        "pandas",
 
     ],
 
