@@ -123,7 +123,7 @@ def main():
 
         if int(local_version) != int(remote_version):
             logging.info(f"New version detected on the {BRANCH} branch.")
-            breakpoint
+            
             if current_branch != BRANCH:
                 logging.info(f"Currently on branch {current_branch}.")
                 
@@ -135,7 +135,7 @@ def main():
                         raise Exception("Failed to stash changes.")
 
                 if not switch_to_branch(BRANCH):
-                    raise Exception("Failed to switch to main branch.")
+                    raise Exception(f"Failed to switch to {BRANCH} branch.")
                 
                 if not update_repo():
                     raise Exception("Failed to update repository.")
@@ -152,11 +152,15 @@ def main():
             logging.info("Update completed successfully.")
             update_performed = True
             install_packages()
+
+            # Restart the script with the new version
+            logging.info("Restarting script with updated version...")
+            os.execv(sys.executable, ['python'] + sys.argv)
         else:
             logging.info("No update required.")
 
-        # Run the main script regardless of whether an update was performed
-        if not run_main_script():
+        # Run the main script if no update was performed
+        if not update_performed and not run_main_script():
             return 1
 
     except Exception as e:
