@@ -1,14 +1,31 @@
 # Hivetrain AutoML Subnet
 
-Welcome to Hivetrain's open-source, distributed AutoML subnet!
-
-## About
-
-Hivetrain is back with an innovative approach to distributed AutoML. Our goal is to tackle Jürgen Schmidhuber's challenge of "inventing an AI scientist smarter than himself so that he can retire". We're creating an incentivization structure that rewards the development of improved neural network components and potentially new algorithms that surpass the current state-of-the-art. Our approach is inspired by the AutoML Zero paper where we construct a genetic code that is evolvable and allows for the gradual building of increasingly complex mathematical functions using evolutionary and gradient based approaches. 
+Welcome to the Hivetrains Incentivized AutoML Loss Subnet, a collaborative platform dedicated to revolutionizing deep learning by automating the discovery of  improved and novel neural network components such loss functions, activation functions and potentially new algorithms that surpass the current state-of-the art. Inspired by the AutoML Zero paper, we leverage genetic programming to progressively develop increasingly complex mathematical functions using evolutionary and gradient based optimization.
 
 ## Current Focus
 
-Currently running on Bittensor testnet-100, we're starting with a loss function search. This is just the beginning of our journey into distributed AutoML. 
+Currently running on Bittensor netuid 47 (100 testnet), we're starting with a loss function search where miners are incentivesed to find better loss functions for a neural network. This is just the beginning of our journey into distributed AutoML. 
+### Why This Is Needed
+Deep learning models have achieved remarkable success across various domains, from computer vision and natural language processing to reinforcement learning and beyond. However, these models often rely on traditional loss functions like Cross-Entropy or Mean Squared Error, which may not fully capture the complexities of modern datasets and tasks.
+
+### Challenges in Deep Learning:
+
+**Complexity of Models**: Advanced architectures like Transformers, GANs, and deep convolutional networks introduce intricate behaviors that standard loss functions might not adequately address.
+
+**Diverse Data Modalities**: With the rise of multimodal data (e.g., combining text, images, and audio), there's a need for loss functions that can handle heterogeneous data effectively.
+
+**Optimization Difficulties**: Deep networks are prone to issues like vanishing/exploding gradients and local minima, which can be mitigated with better-designed loss functions.
+
+### Benefits and Contribution to the AI Landscape
+**Enhanced Model Performance**: Discovering loss functions specifically optimized for deep learning architectures can lead to significant improvements in accuracy, convergence speed, and generalization.
+
+**Advancements in AI Capabilities**: Novel loss functions can enable models to learn more abstract representations, handle complex tasks, and exhibit emergent behaviors. 
+
+**Efficiency in Training**: Optimized loss functions can reduce training times and computational resources by facilitating more effective optimization.
+Facilitating Cutting-Edge Research: By providing a platform for experimenting with loss functions in deep learning, we support researchers in exploring uncharted territories of AI. 
+
+**Community-Driven Innovation**: Incentivizing loss function search attracts a diverse group of experts/researcher, fostering an environment where groundbreaking ideas can emerge. 
+
 
 ## Participation
 
