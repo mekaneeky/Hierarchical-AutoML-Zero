@@ -12,6 +12,7 @@ import pandas as pd
 import numpy as np
 import random 
 import math 
+import pickle
 
 from deap import algorithms, base, creator, tools, gp
 
@@ -21,6 +22,8 @@ from dml.gene_io import save_individual_to_json, load_individual_from_json
 from dml.destinations import PushMixin, PoolPushDestination, HuggingFacePushDestination
 from dml.utils import set_seed
 
+LOCAL_STORAGE_PATH = "./checkpoints"
+os.makedirs(LOCAL_STORAGE_PATH, exist_ok=True)
 
 class BaseMiner(ABC, PushMixin):
     def __init__(self, config):
@@ -132,6 +135,76 @@ class BaseMiner(ABC, PushMixin):
         self.baseline_accuracy = self.evaluate(baseline_model, val_loader)
         logging.info(f"Baseline model accuracy: {self.baseline_accuracy:.4f}")
     
+
+
+    def save_checkpoint(self, population, hof, best_individual_all_time, generation, random_state, torch_rng_state, numpy_rng_state, checkpoint_file):
+        # Convert population and hof individuals to string representations and save fitness
+        population_data = [(str(ind), ind.fitness.values) for ind in population]
+        hof_data = [(str(ind), ind.fitness.values) for ind in hof]
+        
+        # Serialize best_individual_all_time
+        if best_individual_all_time is not None:
+            best_individual_str = str(best_individual_all_time)
+            best_individual_fitness = best_individual_all_time.fitness.values
+        else:
+            best_individual_str = None
+            best_individual_fitness = None
+        
+        checkpoint = {
+            'population': population_data,
+            'hof': hof_data,
+            'best_individual_all_time': (best_individual_str, best_individual_fitness),
+            'generation': generation,
+            'random_state': random_state,
+            'torch_rng_state': torch_rng_state,
+            'numpy_rng_state': numpy_rng_state
+        }
+        with open(checkpoint_file, 'wb') as cp_file:
+            pickle.dump(checkpoint, cp_file)
+
+    def load_checkpoint(self, checkpoint_file):
+        with open(checkpoint_file, 'rb') as cp_file:
+            checkpoint = pickle.load(cp_file)
+        
+        # Reconstruct population and hof individuals from strings and restore fitness
+        population_data = checkpoint['population']
+        population = []
+        for expr_str, fitness_values in population_data:
+            ind = creator.Individual(gp.PrimitiveTree.from_string(expr_str, self.pset))
+            ind.fitness.values = fitness_values
+            population.append(ind)
+        
+        hof_data = checkpoint['hof']
+        hof = tools.HallOfFame(maxsize=len(hof_data))
+        for expr_str, fitness_values in hof_data:
+            ind = creator.Individual(gp.PrimitiveTree.from_string(expr_str, self.pset))
+            ind.fitness.values = fitness_values
+            hof.insert(ind)
+        
+        # Reconstruct best_individual_all_time
+        best_individual_str, best_individual_fitness = checkpoint['best_individual_all_time']
+        if best_individual_str is not None:
+            best_individual_all_time = creator.Individual(gp.PrimitiveTree.from_string(best_individual_str, self.pset))
+            best_individual_all_time.fitness.values = best_individual_fitness
+        else:
+            best_individual_all_time = None
+        
+        # Restore random states
+        random_state = checkpoint['random_state']
+        torch_rng_state = checkpoint['torch_rng_state']
+        numpy_rng_state = checkpoint['numpy_rng_state']
+        
+        # Set the random states
+        random.setstate(random_state)
+        torch.set_rng_state(torch_rng_state)
+        np.random.set_state(numpy_rng_state)
+        
+        # Get the generation number
+        generation = checkpoint['generation']
+        
+        return population, hof, best_individual_all_time, generation
+
+
     @abstractmethod
     def load_data(self):
         pass
@@ -171,47 +244,60 @@ class BaseMiner(ABC, PushMixin):
     def mine(self):
         self.measure_baseline()
         train_loader, val_loader = self.load_data()
-        population = self.toolbox.population(n=50)
-        hof = tools.HallOfFame(1)
+        
+        checkpoint_file = os.path.join(LOCAL_STORAGE_PATH, 'evolution_checkpoint.pkl')
+        
+        # Check if checkpoint exists
+        if os.path.exists(checkpoint_file):
+            # Load checkpoint
+            logging.info("Loading checkpoint...")
+            population, hof, best_individual_all_time, start_generation = self.load_checkpoint(checkpoint_file)
+            logging.info(f"Resuming from generation {start_generation}")
+        else:
+            # No checkpoint, start fresh
+            population = self.toolbox.population(n=50)
+            hof = tools.HallOfFame(1)
+            best_individual_all_time = None
+            start_generation = 0
+            logging.info("Starting evolution from scratch")
+        
         stats = tools.Statistics(lambda ind: ind.fitness.values)
         stats.register("avg", torch.mean)
-        stats.register("min", torch.min)#Replaced np
-        best_individual_all_time = None
+        stats.register("min", torch.min)  # Replaced np with torch
         
-        for generation in tqdm(range(self.config.Miner.generations)):
+        for generation in tqdm(range(start_generation, self.config.Miner.generations)):
             # Evaluate the entire population
             for i, ind in enumerate(population):
                 if not ind.fitness.valid:
                     ind.fitness.values = self.toolbox.evaluate(ind, train_loader, val_loader)
                 logging.debug(f"Gen {generation}, Individual {i}: Fitness = {ind.fitness.values[0]}")
-
+        
             # Select the next generation individuals
             offspring = self.toolbox.select(population, len(population))
             # Clone the selected individuals
             offspring = list(map(self.toolbox.clone, offspring))
-
+        
             # Apply crossover and mutation on the offspring
             for child1, child2 in zip(offspring[::2], offspring[1::2]):
                 if random.random() < 0.5:
                     self.toolbox.mate(child1, child2)
                     del child1.fitness.values
                     del child2.fitness.values
-
+        
             for mutant in offspring:
                 if random.random() < 0.2:
                     self.toolbox.mutate(mutant)
                     del mutant.fitness.values
-
             population[:] = offspring
-                
+        
             invalid_ind = [ind for ind in population if not ind.fitness.valid]
             for i, ind in enumerate(invalid_ind):
                 ind.fitness.values = self.toolbox.evaluate(ind, train_loader, val_loader)
                 logging.debug(f"Gen {generation}, New Individual {i}: Fitness = {ind.fitness.values[0]}")
-
+        
             # Update the hall of fame with the generated individuals
             hof.update(population)
-
+        
             # Gather all the fitnesses in one list and print the stats
             fits = [ind.fitness.values[0] for ind in population if not math.isinf(ind.fitness.values[0])]
             
@@ -225,44 +311,33 @@ class BaseMiner(ABC, PushMixin):
             logging.info(f"Max {max(fits) if fits else float('inf')}")
             logging.info(f"Avg {mean}")
             logging.info(f"Std {std}")
-
+        
             best_individual = tools.selBest(population, 1)[0]
-
-            
-            # self.log_metrics( {
-            # 'generation':generation,
-            # 'best_fitness': best_genome.fitness,
-            # 'mean_fitness': mean_fitness,
-            # 'min_fitness': min_fitness,
-            # 'median_fitness': median_fitness,
-            # 'lower_quartile': lower_quartile,
-            # 'upper_quartile': upper_quartile
-            # })
-            
-            # if generation % self.mutation_log_interval == 0:
-            #     self.log_mutated_child(offspring, generation)
+        
             if best_individual_all_time is None:
                 best_individual_all_time = best_individual
             if best_individual.fitness.values[0] > best_individual_all_time.fitness.values[0]:
                 best_individual_all_time = deepcopy(best_individual)
                 logging.info(f"New best gene found. Pushing to {self.config.gene_repo}")
-                # if self.migration_server_url:
-                #     best_migration_fitness = self.get_best_migrant()
-                #     if best_migration_fitness < best_genome_all_time.fitness:
-                #         self.push_to_remote(best_genome_all_time, f"Best gene (Gen {generation}, Acc {best_genome_all_time.fitness:.4f})")
-                #         self.emigrate_genes(best_genome_all_time)
-                # else:
                 self.push_to_remote(best_individual_all_time, f"Best gene (Gen {generation}, Acc {best_individual_all_time.fitness.values[0]:.4f})")
-                                
+                                    
             logging.info(f"Generation {generation}: Best accuracy = {best_individual.fitness.values[0]:.4f}")
-            # logging.info(f"Mean accuracy = {mean_fitness:.4f}, Min accuracy = {min_fitness:.4f}")
-            # logging.info(f"Median accuracy = {median_fitness:.4f}")
-            # logging.info(f"Lower quartile = {lower_quartile:.4f}, Upper quartile = {upper_quartile:.4f}")
-            # logging.info(f"Improvement over baseline: {best_genome.fitness - self.baseline_accuracy:.4f}")
-            # logging.info(f"Total unique algorithms seen: {len(self.automl.fec_cache.keys())}")
-
             
+            # Save checkpoint at the end of the generation
+            random_state = random.getstate()
+            torch_rng_state = torch.get_rng_state()
+            numpy_rng_state = np.random.get_state()
+            self.save_checkpoint(population, hof, best_individual_all_time, generation, random_state, torch_rng_state, numpy_rng_state, checkpoint_file)
+        
+        # Evolution finished
+        logging.info("Evolution finished")
+        
+        # Remove the checkpoint file if evolution is complete
+        if os.path.exists(checkpoint_file):
+            os.remove(checkpoint_file)
+        
         return best_individual_all_time
+
     
     # def evaluate_population(self, population, train_loader, val_loader):
     #     for genome in tqdm(population):
