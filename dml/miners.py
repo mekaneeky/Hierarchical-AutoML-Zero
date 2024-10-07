@@ -13,13 +13,12 @@ import numpy as np
 import random 
 import math 
 import pickle
-import re 
 
 from deap import algorithms, base, creator, tools, gp
 
 from dml.models import BaselineNN, EvolvableNN
 from dml.ops import create_pset
-from dml.gene_io import save_individual_to_json, load_individual_from_json
+from dml.gene_io import save_individual_to_json, load_individual_from_json, safe_eval
 from dml.gp_fix import SafePrimitiveTree
 from dml.destinations import PushMixin, PoolPushDestination, HuggingFacePushDestination
 from dml.utils import set_seed
@@ -138,15 +137,6 @@ class BaseMiner(ABC, PushMixin):
         self.baseline_accuracy = self.evaluate(baseline_model, val_loader)
         logging.info(f"Baseline model accuracy: {self.baseline_accuracy:.4f}")
     
-    @staticmethod
-    def safe_eval(expr):
-        # Replace tensor(...) with torch.tensor(...)
-        expr = re.sub(r'tensor\((.*?)\)', r'torch.tensor(\1)', expr)
-        try:
-            return eval(expr)
-        except NameError:
-            # If it's not evaluable (like a variable name), return as is
-            return expr
 
     def save_checkpoint(self, population, hof, best_individual_all_time, generation, random_state, torch_rng_state, numpy_rng_state, checkpoint_file):
         # Convert population and hof individuals to string representations and save fitness
@@ -181,14 +171,14 @@ class BaseMiner(ABC, PushMixin):
         population_data = checkpoint['population']
         population = []
         for expr_str, fitness_values in population_data:
-            ind = creator.Individual(SafePrimitiveTree.from_string(expr_str, self.pset, self.safe_eval))
+            ind = creator.Individual(SafePrimitiveTree.from_string(expr_str, self.pset, safe_eval))
             ind.fitness.values = fitness_values
             population.append(ind)
         
         hof_data = checkpoint['hof']
         hof = tools.HallOfFame(maxsize=len(hof_data))
         for expr_str, fitness_values in hof_data:
-            ind = creator.Individual(SafePrimitiveTree.from_string(expr_str, self.pset, self.safe_eval))
+            ind = creator.Individual(SafePrimitiveTree.from_string(expr_str, self.pset, safe_eval))
             ind.fitness.values = fitness_values
             hof.insert(ind)
         
