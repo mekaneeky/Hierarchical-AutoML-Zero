@@ -5,7 +5,7 @@ from dml.validators import ValidatorFactory
 from chain.btt_connector import BittensorNetwork
 from chain.chain_manager import ChainMultiAddressStore
 from chain.hf_manager import HFManager
-from config import config 
+from configs.config import config
 
 
 def setup_logging(log_file='validator.log'):

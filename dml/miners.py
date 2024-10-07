@@ -31,7 +31,7 @@ class BaseMiner(ABC, PushMixin):
     def __init__(self, config):
         self.config = config
         self.device = self.config.device
-        self.seed = self.config.seed
+        self.seed = self.config.Miner.seed
 
         set_seed(self.seed)
     
@@ -266,7 +266,7 @@ class BaseMiner(ABC, PushMixin):
             logging.info(f"Resuming from generation {start_generation}")
         else:
             # No checkpoint, start fresh
-            population = self.toolbox.population(n=50)
+            population = self.toolbox.population(n=self.config.Miner.population_size)
             hof = tools.HallOfFame(1)
             best_individual_all_time = None
             start_generation = 0
@@ -416,6 +416,7 @@ class BaseMiningPoolMiner(BaseMiner):
         pass
 
 class ActivationMiner(BaseMiner):
+
     def load_data(self):
         transform = transforms.Compose([transforms.ToTensor(), transforms.Normalize((0.1307,), (0.3081,))])
         train_data = datasets.MNIST('../data', train=True, download=True, transform=transform)
@@ -585,7 +586,7 @@ class SimpleMiner(BaseMiner):
         train_data, _ = self.load_data()
         
         # Use DEAP's algorithms module for the evolutionary process
-        population, logbook = algorithms.eaSimple(self.toolbox.population(n=50), self.toolbox, 
+        population, logbook = algorithms.eaSimple(self.toolbox.population(n=self.config.Miner.population_size), self.toolbox, 
                                                   cxpb=0.5, mutpb=0.2, 
                                                   ngen=self.config.Miner.generations, 
                                                   stats=self.stats, halloffame=self.hof, 

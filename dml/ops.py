@@ -2,7 +2,7 @@ import random
 import torch
 from deap import gp
 import torch 
-from config import config
+from configs.config import config
 device = torch.device(config.device)
 
 def safe_div(x, y):

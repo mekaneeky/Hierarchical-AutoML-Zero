@@ -1,6 +1,6 @@
 from dml.miners import MinerFactory
 from chain.btt_connector import BittensorNetwork
-from config import config
+from configs.config import config
 def main(config):
     bt_config = config.get_bittensor_config()
     BittensorNetwork.initialize(bt_config)

@@ -32,7 +32,7 @@ class BaseValidator(ABC):
         self.normalized_scores = {}
         self.metrics_file = config.metrics_file
         self.metrics_data = []
-        self.seed = self.config.seed
+        self.seed = self.config.Validator.seed
 
         self.penalty_factor = config.Validator.time_penalty_factor
         self.penalty_max_time = config.Validator.time_penalty_max_time
@@ -201,7 +201,7 @@ class BaseValidator(ABC):
                 file_details = [thing for thing in api.list_repo_tree(repo_id=repo_name) if thing.path=="best_gene.json"]
                 if file_details:
                     file_size = file_details[0].size
-                    max_size = self.config.max_gene_size
+                    max_size = self.config.Validator.max_gene_size
                     
                     if file_size > max_size:
                         logging.warning(f"Gene file size ({file_size} bytes) exceeds limit ({max_size} bytes). Skipping download.")
