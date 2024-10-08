@@ -52,7 +52,8 @@ For detailed instructions on setting up and running miners and validators, pleas
 ## Community and Support
 
 Join our community channels for discussions, support, and updates:
-- [Discord](https://discord.com/channels/799672011265015819/1174839377659183174)
+- [Bittensor Discord](https://discord.com/channels/799672011265015819/1174839377659183174)
+- [Hiveτrain Discord](https://discord.gg/JpRSqTBBZU)
 
 ---
 
