@@ -1,26 +1,17 @@
 # Hivetrain AutoML Subnet
 
-Welcome to the Hivetrains Incentivized AutoML Loss Subnet, a collaborative platform dedicated to revolutionizing deep learning by automating the discovery of  improved and novel neural network components such loss functions, activation functions and potentially new algorithms that surpass the current state-of-the art. Inspired by the AutoML Zero paper, we leverage genetic programming to progressively develop increasingly complex mathematical functions using evolutionary and gradient based optimization.
+Hivetrain's Incentivized AutoML Loss Subnet, a collaborative platform dedicated to revolutionizing deep learning by automating the discovery of improved and novel neural network components such loss functions, activation functions and potentially new algorithms that surpass the current state-of-the art. Inspired by the AutoML Zero paper, we leverage genetic programming to progressively develop increasingly complex mathematical functions using evolutionary and gradient based optimization.
 
 ## Current Focus
 
-Currently running on Bittensor netuid 47 (100 testnet), we're starting with a loss function search where miners are incentivesed to find better loss functions for a neural network. This is just the beginning of our journey into distributed AutoML. 
+Currently running on Bittensor netuid 47 (100 testnet), we're starting with a loss function search where miners are incentivesed to find better loss functions for a neural networks.
+
+## Roadmap
+
+Future steps include scaling up the complexity and generality of evaluations as well as expanding the search space to more AI algorithm components (losses, activations, layer types). Due to the research aligned nature of this subnet, new experiments and code updates are expected frequently and will be announced earlier on the Hivetrain discord server as well as the bittensor subnet discord channel.
+
 ### Why This Is Needed
-Deep learning models have achieved remarkable success across various domains, from computer vision and natural language processing to reinforcement learning and beyond. However, these models often rely on traditional loss functions like Cross-Entropy or Mean Squared Error, which may not fully capture the complexities of modern datasets and tasks.
-
-### Challenges in Deep Learning:
-
-* **Complexity of Models**: Advanced architectures like Transformers, GANs, and deep convolutional networks introduce intricate behaviors that standard loss functions might not adequately address.
-* **Diverse Data Modalities**: With the rise of multimodal data (e.g., combining text, images, and audio), there's a need for loss functions that can handle heterogeneous data effectively.
-* **Optimization Difficulties**: Deep networks are prone to issues like vanishing/exploding gradients and local minima, which can be mitigated with better-designed loss functions.
-
-### Benefits and Contribution to the AI Landscape
-* **Enhanced Model Performance**: Discovering loss functions specifically optimized for deep learning architectures can lead to significant improvements in accuracy, convergence speed, and generalization.
-* **Advancements in AI Capabilities**: Novel loss functions can enable models to learn more abstract representations, handle complex tasks, and exhibit emergent behaviors. 
-* **Efficiency in Training**: Optimized loss functions can reduce training times and computational resources by facilitating more effective optimization.
-* **Facilitating Cutting-Edge Research**: By providing a platform for experimenting with loss functions in deep learning, we support researchers in exploring uncharted territories of AI. 
-* **Community-Driven Innovation**: Incentivizing loss function search attracts a diverse group of experts/researcher, fostering an environment where groundbreaking ideas can emerge. 
-
+Deep learning models have achieved remarkable success across various domains, from computer vision and natural language processing to reinforcement learning and beyond. However, these models often rely on hand designed features. AI has proven superhuman performance in many domains, including chess, go, medical diagnostics and music generation. We think that AI research should be added to this list. By training AI to design traditionally hand designed features and components of AI algorithms we move towards self-improving AI and superintelligence. 
 
 ## Participation
 
@@ -34,10 +25,10 @@ You have two main approaches as a miner:
    - Design more efficient miners to maximize your available compute resources.
 
 2. **Rely on Compute:**
-   - If you have substantial computational resources:
+   - If you have enough computational resources on your own:
      - Run an independent miner.
-     - Join a mining pool (Work in Progress).
-     - Run a miner on the mining pool (note: rewards will be shared with other miners).
+   - If you don't:
+     - Joing a mining pool (work in progress)
 
 ### As a Validator
 
@@ -52,7 +43,7 @@ A: Yes, our work is inspired by and based on several research papers:
 - For more AutoML research areas, refer to the [AutoML Conference 2024](https://2024.automl.cc/)
 
 **Q: Are you done with distributed training?**  
-A: Distributed training is a technically complex problem. We're still developing our solution, and our candidate approach is not yet ready for release.
+A: We're still developing our distributed training solution, experiments are running. 
 
 ## Getting Started
 
