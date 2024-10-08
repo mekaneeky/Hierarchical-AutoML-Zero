@@ -10,21 +10,16 @@ Deep learning models have achieved remarkable success across various domains, fr
 
 ### Challenges in Deep Learning:
 
-**Complexity of Models**: Advanced architectures like Transformers, GANs, and deep convolutional networks introduce intricate behaviors that standard loss functions might not adequately address.
-
-**Diverse Data Modalities**: With the rise of multimodal data (e.g., combining text, images, and audio), there's a need for loss functions that can handle heterogeneous data effectively.
-
-**Optimization Difficulties**: Deep networks are prone to issues like vanishing/exploding gradients and local minima, which can be mitigated with better-designed loss functions.
+* **Complexity of Models**: Advanced architectures like Transformers, GANs, and deep convolutional networks introduce intricate behaviors that standard loss functions might not adequately address.
+* **Diverse Data Modalities**: With the rise of multimodal data (e.g., combining text, images, and audio), there's a need for loss functions that can handle heterogeneous data effectively.
+* **Optimization Difficulties**: Deep networks are prone to issues like vanishing/exploding gradients and local minima, which can be mitigated with better-designed loss functions.
 
 ### Benefits and Contribution to the AI Landscape
-**Enhanced Model Performance**: Discovering loss functions specifically optimized for deep learning architectures can lead to significant improvements in accuracy, convergence speed, and generalization.
-
-**Advancements in AI Capabilities**: Novel loss functions can enable models to learn more abstract representations, handle complex tasks, and exhibit emergent behaviors. 
-
-**Efficiency in Training**: Optimized loss functions can reduce training times and computational resources by facilitating more effective optimization.
-Facilitating Cutting-Edge Research: By providing a platform for experimenting with loss functions in deep learning, we support researchers in exploring uncharted territories of AI. 
-
-**Community-Driven Innovation**: Incentivizing loss function search attracts a diverse group of experts/researcher, fostering an environment where groundbreaking ideas can emerge. 
+* **Enhanced Model Performance**: Discovering loss functions specifically optimized for deep learning architectures can lead to significant improvements in accuracy, convergence speed, and generalization.
+* **Advancements in AI Capabilities**: Novel loss functions can enable models to learn more abstract representations, handle complex tasks, and exhibit emergent behaviors. 
+* **Efficiency in Training**: Optimized loss functions can reduce training times and computational resources by facilitating more effective optimization.
+* **Facilitating Cutting-Edge Research**: By providing a platform for experimenting with loss functions in deep learning, we support researchers in exploring uncharted territories of AI. 
+* **Community-Driven Innovation**: Incentivizing loss function search attracts a diverse group of experts/researcher, fostering an environment where groundbreaking ideas can emerge. 
 
 
 ## Participation
