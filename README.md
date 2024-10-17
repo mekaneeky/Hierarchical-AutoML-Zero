@@ -2,9 +2,11 @@
 
 Hivetrain's Incentivized AutoML Loss Subnet, a collaborative platform dedicated to revolutionizing deep learning by automating the discovery of improved and novel neural network components such loss functions, activation functions and potentially new algorithms that surpass the current state-of-the art. Inspired by the AutoML Zero paper, we leverage genetic programming to progressively develop increasingly complex mathematical functions using evolutionary and gradient based optimization.
 
+Traditionally, critical components of neural networks—such as loss functions, layers, optimizers, and activation functions—are painstakingly crafted by human researchers. However, with the remarkable advancements in AI, we are poised to leverage its capabilities to surpass human ingenuity in AI research. Our subnet aims to enable AI to autonomously innovate and excel in the creation of these essential components.
+
 ## Current Focus
 
-Currently running on Bittensor netuid 47 (100 testnet), we're starting with a loss function search where miners are incentivesed to find better loss functions for a neural networks.
+Currently running on Bittensor netuid (coming soon) (100 testnet), we're starting with a loss function search where miners are incentivesed to find better loss functions for a neural networks.
 
 ## Roadmap
 
